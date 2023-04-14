@@ -30,7 +30,8 @@
 */
 
 import { /* ALL_ASTYPES */ ADD, ADDRESS, ADDRESS_CLOSE, ALLOCATE_PAGES, AND, ARG_LIST, AS, ASSIGN, BAD_TOKEN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, BLOCK, BLOCK_CLOSE, BREAK, CALL, COMMA, COMMENT, CONTINUE, DECLARATION, DEFAULT_MEMORY, DEFAULT_TABLE, DEFINITION, ELSE, END_OF_INPUT, EQ_COMPARISON, EXPORT, EXPORT_TYPE, F32_LITERAL, F64_LITERAL, FN, FN_PTR, FN_SIGNATURE, FROM, I32_LITERAL, I64_LITERAL, IF, IMMUTABLE, IMPORT, INIT_EXPR, LOOP, MEMORY_ACCESS, MISC_INFIX, NEG, OR, ORDER_COMPARISON, PAGES_ALLOCATED, PARAM_LIST, PAREN, PAREN_CLOSE, PASS, PTR, RETURN, ROOT, SCALE_OP, SEMICOLON, STRING, STORAGE_TYPE, SUB, SUFFIX_OP, TYPE_LIST, UNARY_MATH_OP, VALUE_TYPE, VARIABLE, VOID, WS, YIELD, /* END_ALL_ASTYPES */
-  ASType
+  ASType,
+  ELEMENT
 } from "./syntax.js";
 import { CompileError } from "./compileError.js";
 import { operatorTable } from "./operatorTable.js";
@@ -50,7 +51,7 @@ import { ASTNode, Def, RunType } from './parser.js';
 
   It returns the runType of the node (treated as an expression), for convenience.
 */
-export function validate(node: ASTNode, valueRequired: boolean) {
+export function validate(node: ASTNode, valueRequired: boolean): RunType {
   let { ASType, token, children, scope, parent, runType } = node;
 
   let leftType: RunType | undefined
@@ -247,6 +248,20 @@ export function validate(node: ASTNode, valueRequired: boolean) {
       runType = node.meta.runType;
     } break;
 
+
+    case ELEMENT: {
+      let { offsetIndex, elements } = node.meta
+      // TODO: validate elements.length?
+      if (elements.length === 0) {
+        throw new CompileError("Missing Function References", { node })
+      }
+      validate(offsetIndex, true)
+      for (let i = 0; i < elements.length; i++) {
+        let child = elements[i];
+        validate(child, true);
+      }
+      break;
+    }
 
     case ELSE: {
       let [{ children: [condition, ifBody] }, elseBody] = children;

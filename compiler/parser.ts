@@ -1,6 +1,7 @@
 import {
   getASType, /* ALL_ASTYPES */ ADD, ADDRESS, ADDRESS_CLOSE, ALLOCATE_PAGES, AND, ARG_LIST, AS, ASSIGN, BAD_TOKEN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, BLOCK, BLOCK_CLOSE, BREAK, CALL, COMMA, COMMENT, CONTINUE, DECLARATION, DEFAULT_MEMORY, DEFAULT_TABLE, DEFINITION, ELSE, END_OF_INPUT, EQ_COMPARISON, EXPORT, EXPORT_TYPE, F32_LITERAL, F64_LITERAL, FN, FN_PTR, FN_SIGNATURE, FROM, I32_LITERAL, I64_LITERAL, IF, IMMUTABLE, IMPORT, INIT_EXPR, LOOP, MEMORY_ACCESS, MISC_INFIX, NEG, OR, ORDER_COMPARISON, PAGES_ALLOCATED, PARAM_LIST, PAREN, PAREN_CLOSE, PASS, PTR, RETURN, ROOT, SCALE_OP, SEMICOLON, STRING, STORAGE_TYPE, SUB, SUFFIX_OP, TYPE_LIST, UNARY_MATH_OP, VALUE_TYPE, VARIABLE, VOID, WS, YIELD, /* END_ALL_ASTYPES */
-  ASType
+  ASType,
+  ELEMENT
 } from "./syntax.js";
 import { validate } from "./validation.js";
 import { CompileError } from "./compileError.js";
@@ -181,6 +182,7 @@ export class Scope {
   isGlobal: boolean // = true // Is this the global scope? Yes.
   functions: Def[] = []
   variables: Def[] = []
+  elements: Def[] = []
   exports: Def[] = []
   references: ASTNode[] = [] // A running list of all the references that need to be resolved.
   parent: Scope | null = null
@@ -210,6 +212,7 @@ function createScope(parent: Scope | null): Scope {
       isGlobal: true, // Is this the global scope? Yes.
       functions: [],
       variables: [],
+      elements: [],
       exports: [],
       references: [], // A running list of all the references that need to be resolved.
       children: [], // A list of sub-scopes.
@@ -240,7 +243,7 @@ function createScope(parent: Scope | null): Scope {
 const storageTypeSplitter = /(.(..))_?(.)?(..?)?/;  // This is a tiny utility regular expression used by define() below.
 
 export type RunType = 'void' | 'i32' | 'i64' | 'f32' | 'f64'
-export type DefKind = 'global' | 'function' | 'memory' | 'table'
+export type DefKind = 'global' | 'function' | 'memory' | 'table' | 'element'
 
 type StorageType = 'i32'
 export class Def {
@@ -270,6 +273,8 @@ export class Def {
   storageType: StorageType
   initialSize: ASTNode
   maxSize: ASTNode
+  offsetIndex: ASTNode
+  elements: ASTNode[]
   scope: Scope //| null //,
   token: Token //
   body: ASTNode | null
@@ -419,6 +424,25 @@ function defineTable(node: ASTNode) {
   node.meta = definition;
 }
 
+/*
+  This records the element definitions in the table object.
+*/
+function defineElement(node: ASTNode) {
+  let [offsetIndex, elements] = node.children;
+
+  // Many of these fields will be updated later.
+  let definition = new Def({
+    ASType: ELEMENT,
+    token: node.token,
+    kind: "element",
+    offsetIndex,
+    elements: elements.children
+  });
+
+  node.scope.elements.push(definition);
+  node.meta = definition;
+}
+
 
 /*
   This finalizes the placement of an ASTNode in the AST (by adding it to its parent's .children array).
@@ -442,6 +466,8 @@ function place(node: ASTNode) {
     defineMemory(node);
   } else if (ASType === DEFAULT_TABLE) {
     defineTable(node);
+  } else if (ASType === ELEMENT) {
+    defineElement(node)
   } else if (ASType.isReference && !parent.ASType.createsName) {  // If it's a reference to another definition, note that for resolution.
     node.scope.references.push(node);
   }
@@ -509,7 +535,8 @@ function enforceReferenceSemantics(reference: ASTNode) {
 
   if (reference.parent.ASType === EXPORT || reference.parent.ASType === AS) return; // We can export any type.
 
-  if (reference.ASType === VARIABLE && (refType === FN || refType === FN_SIGNATURE)) {
+  if (reference.ASType === VARIABLE && (refType === FN || refType === FN_SIGNATURE) && reference.parent.parent.ASType !== ELEMENT) {
+    console.log('YES', reference)
     throw new CompileError("Bad Reference: Not a Variable", { node: reference });
   } else if (reference.ASType === CALL && refType !== FN && refType !== FN_SIGNATURE && refType !== FN_PTR) {
     throw new CompileError("Bad Reference: Not a Function", { node: reference });
@@ -540,7 +567,8 @@ function functionSignatureIndex(scope: Scope, paramTypes: RunType[], returnType:
 // Since the ASTypes are normal objects, it can be hard to tell which is which in a debugger.
 // Uncomment these lines to assign a label to each ASType in /compiler/syntax.js corresponding to its export name.
 
-// import * as ASTypes from "./syntax.js";
-// for (let [key, value] of Object.entries(ASTypes)) {
-//  value._name = key;
-// }
+import * as ASTypes from "./syntax.js";
+for (let [key, value] of Object.entries(ASTypes)) {
+  // @ts-ignore
+  value._name = key
+}

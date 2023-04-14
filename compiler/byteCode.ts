@@ -43,8 +43,6 @@ export class ByteCodeContainer {
   reservedSizeRecord: BytesPart | null
 
   constructor(public path: any, public parent: ByteCodeContainer | null = null) {
-    // this.path = path;
-    // this.parent = parent;
     this.parts = parent === null ? [] : parent.parts; // If this isn't the top-level container, we actually inject bytes into the parent.
     this.totalSize = 0;
     this.reservedSizeRecord = null;

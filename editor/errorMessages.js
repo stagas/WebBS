@@ -1,6 +1,6 @@
 /*
   This file exports generateErrorMessage(), which creates a human-readable representation of errors thrown by the compiler.
-  
+
   This is factored out from the compiler code, because the form of error messages is a presentational issue.
     The compiler throws CompileError objects, which contain just enough information to generate a more useful message here.
     These functions format errors using HTML markup for the editor to display, which the compiler shouldn't need to know anything about.
@@ -9,14 +9,14 @@
     that are annotated with references into the code.
   (See https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals#Tagged_templates if you're not familiar with
     tagged templates.)
-  
+
   The utility functions that define the tagged template literal format used here are at the bottom of the file.
 
   TODO: Using string names for error message types is a bad idea (typos cause problems, etc.) - this should be refactored.
 */
-import { /* ALL_ASTYPES */ ADD, ADDRESS, ADDRESS_CLOSE, ALLOCATE_PAGES, AND, ARG_LIST, AS, ASSIGN, BAD_TOKEN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, BLOCK, BLOCK_CLOSE, BREAK, CALL, COMMA, COMMENT, CONTINUE, DECLARATION, DEFAULT_MEMORY, DEFAULT_TABLE, DEFINITION, ELSE, END_OF_INPUT, EQ_COMPARISON, EXPORT, EXPORT_TYPE, F32_LITERAL, F64_LITERAL, FN, FN_PTR, FN_SIGNATURE, FROM, I32_LITERAL, I64_LITERAL, IF, IMMUTABLE, IMPORT, INIT_EXPR, LOOP, MEMORY_ACCESS, MISC_INFIX, NEG, OR, ORDER_COMPARISON, PAGES_ALLOCATED, PARAM_LIST, PAREN, PAREN_CLOSE, PASS, PTR, RETURN, ROOT, SCALE_OP, SEMICOLON, STRING, STORAGE_TYPE, SUB, SUFFIX_OP, TYPE_LIST, UNARY_MATH_OP, VALUE_TYPE, VARIABLE, VOID, WS, YIELD /* END_ALL_ASTYPES */ } from "/WebBS/compiler/syntax.js";
-import {CompileError} from "/WebBS/compiler/compileError.js";
-import {lexify} from "/WebBS/compiler/lexer.js";
+import { /* ALL_ASTYPES */ ADD, ADDRESS, ADDRESS_CLOSE, ALLOCATE_PAGES, AND, ARG_LIST, AS, ASSIGN, BAD_TOKEN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, BLOCK, BLOCK_CLOSE, BREAK, CALL, COMMA, COMMENT, CONTINUE, DECLARATION, DEFAULT_MEMORY, DEFAULT_TABLE, DEFINITION, ELSE, END_OF_INPUT, EQ_COMPARISON, EXPORT, EXPORT_TYPE, F32_LITERAL, F64_LITERAL, FN, FN_PTR, FN_SIGNATURE, FROM, I32_LITERAL, I64_LITERAL, IF, IMMUTABLE, IMPORT, INIT_EXPR, LOOP, MEMORY_ACCESS, MISC_INFIX, NEG, OR, ORDER_COMPARISON, PAGES_ALLOCATED, PARAM_LIST, PAREN, PAREN_CLOSE, PASS, PTR, RETURN, ROOT, SCALE_OP, SEMICOLON, STRING, STORAGE_TYPE, SUB, SUFFIX_OP, TYPE_LIST, UNARY_MATH_OP, VALUE_TYPE, VARIABLE, VOID, WS, YIELD /* END_ALL_ASTYPES */ } from "../compiler/syntax.js";
+import { CompileError } from "../compiler/compileError.js";
+import { lexify } from "../compiler/lexer.js";
 
 
 /*
@@ -24,32 +24,32 @@ import {lexify} from "/WebBS/compiler/lexer.js";
   Mostly, we just translate CompileErrors into a human-readable format,
     but it also handles WebAssembly compile/runtime errors, and whatever else we happen to catch.
 */
-export function generateErrorMessage (error) {
+export function generateErrorMessage(error) {
   if (error instanceof CompileError) {
-    let {type, data} = error;
-    let formattedError = {type, message: "", references: []};
+    let { type, data } = error;
+    let formattedError = { type, message: "", references: [] };
     let msg = (strings, ...objects) => buildErrorFromTemplate(formattedError, strings, objects);
     // These may not end up being defined, but it's convenient to try to pull them out here, so we can avoid lots of indirection below.
     let node = data.node;
-    let token = node && node.token;    
-    
+    let token = node && node.token;
+
     switch (type) {
       case "32-bit Address Required": {
         return msg`Addresses must have type ${R("i32")}, but this${ref(token)} expression appears to have type ${R(node.runType)}.`;
       }
 
       case "Assignment Type Mismatch": {
-        return msg`Assignment type mismatch!\n\nThe variable ${codeRef(data.left.token)} has type ${R(data.runType)}, whereas the expression at ${ref(data.right.token)} has type ${R(data.right.runType)}.`;      
+        return msg`Assignment type mismatch!\n\nThe variable ${codeRef(data.left.token)} has type ${R(data.runType)}, whereas the expression at ${ref(data.right.token)} has type ${R(data.right.runType)}.`;
       }
 
       case "Assignment To Immutable": {
         return msg`Can't assign to ${code(node.children[0].token)} at ${ref(token)} because ${code(node.children[0].token)} is immutable.`;
       }
-      
+
       case "Bad Condition": {
         return msg`The value of ${codeRef(token)} is used as the condition of an ${R("if")} but its type can't be interpreted as a Boolean (all ${R("if")} conditions must have a numeric type).`;
       }
-      
+
       case "Bad Import Source": {
         return msg`Import sources need to have the form ${R("\"MODULE/FIELD\"")}. I don't know what to make of ${codeRef(token)}.`;
       }
@@ -168,7 +168,7 @@ export function generateErrorMessage (error) {
       }
 
       case "Undefined Operator": {
-        return diagnoseOperatorError(msg, node); 
+        return diagnoseOperatorError(msg, node);
       }
 
       case "Unintelligible Size": {
@@ -200,6 +200,14 @@ export function generateErrorMessage (error) {
       case "Wrong Number Of Arguments": {
         // TODO: This should probably list the expected arguments.
         return msg`Wrong number of arguments for call to ${codeRef(token)}: expected ${node.meta.paramTypes.length}, got ${data.args.length}.`;
+      }
+
+      case "Missing Function References": {
+        return msg`element${ref(token)} requires a list of function references as the second operand`;
+      }
+
+      default: {
+        return msg`Unknown Error: ${type}`
       }
     } // The huge switch statement ends here.
 
@@ -234,7 +242,7 @@ export function generateErrorMessage (error) {
 /*
   This generates an error message for operator misusages.
 */
-function diagnoseOperatorError (msg, node) {
+function diagnoseOperatorError(msg, node) {
   if (node.ASType.expectedChildCount === 2) {
     let leftType = node.children[0].runType;
     let rightType = node.children[1].runType;
@@ -245,8 +253,8 @@ function diagnoseOperatorError (msg, node) {
 
   msg`The operator ${codeRef(node.token)} is only defined for the following types: \n  `;
 
-  let acceptableTypes = operatorRunTypeConstraints[node.token.text];  
-  
+  let acceptableTypes = operatorRunTypeConstraints[node.token.text];
+
   for (let runType of acceptableTypes) {
     msg`${R(runType)} `;
   }
@@ -262,7 +270,7 @@ function diagnoseOperatorError (msg, node) {
 /*
   This generates a custom error message for CTC violations, depending on the parent node, child node and position.
 */
-function diagnoseCTCError (msg, {node, child, position}) {
+function diagnoseCTCError(msg, { node, child, position }) {
   let token = node.token;
 
   switch (node.ASType) {
@@ -325,7 +333,7 @@ function diagnoseCTCError (msg, {node, child, position}) {
     }
 
     case FN: {
-      if (position === 0) { 
+      if (position === 0) {
         return msg`Expected a list of function parameters here${ref(child.token)}.`;
       } else if (position === 1) {
         return msg`Expected a function return type here${ref(child.token)}.`;
@@ -334,9 +342,9 @@ function diagnoseCTCError (msg, {node, child, position}) {
       }
     }
 
-    case FN_SIGNATURE: 
+    case FN_SIGNATURE:
     case FN_PTR: {
-      if (position === 0) { 
+      if (position === 0) {
         return msg`Expected a list of function parameters types here${ref(child.token)}.`;
       } else {
         return msg`Expected a function return type here${ref(child.token)}.`;
@@ -395,7 +403,7 @@ function diagnoseCTCError (msg, {node, child, position}) {
     case ROOT: {
       return msg`Only definitions and ${R("import")}/${R("export")} statements may appear in the global scope, not whatever this${ref(child.token)} is.`;
     }
-    
+
     case TYPE_LIST: {
       msg`Only parameter types may appear in function parameter lists`;
       if (child.ASType === DEF_VAR) {
@@ -409,9 +417,13 @@ function diagnoseCTCError (msg, {node, child, position}) {
       return msg`Expected a storage type (e.g. ${R("f32")}, ${R("i64_u32")}) here${ref(child.token)}.`;
     }
 
-    
+
     case SUFFIX_OP: {
       return msg`Expected a numeric variable name immediately before ${codeRef(token)}.`;
+    }
+
+    default: {
+      return msg`${codeRef(token)}`
     }
   }
 }
@@ -420,7 +432,7 @@ function diagnoseCTCError (msg, {node, child, position}) {
 /*
   This generates a custom error message for PTC violations, determined by the child and parent node ASTypes.
 */
-function diagnosePTCError (msg, {node: {ASType, token, parent}}) {
+function diagnosePTCError(msg, { node: { ASType, token, parent } }) {
   switch (ASType) {
     case ADDRESS: {
       return msg`This${ref(token)} should be probably be attached to some sort of pointer.`;
@@ -480,7 +492,7 @@ function diagnosePTCError (msg, {node: {ASType, token, parent}}) {
     case VOID: {
       return msg`Unexpected ${codeRef(token)}. ${R("void")} can only appear as a function return type or maximum size limit for a table or memory store.`;
     }
-  
+
     default: {
       return `Unexpected expression: ${codeRef(token)}`;
     }
@@ -498,7 +510,7 @@ function diagnosePTCError (msg, {node: {ASType, token, parent}}) {
   If any of those parts are functions, they're called with the error message object.
   Otherwise, they're assumed to be strings and interpolated into the error message.
 */
-function buildErrorFromTemplate (error, strings, objects) {
+function buildErrorFromTemplate(error, strings, objects) {
   for (let i = 0; i < objects.length; i++) {
     error.message += strings[i];
     let object = objects[i];
@@ -517,7 +529,7 @@ function buildErrorFromTemplate (error, strings, objects) {
 /*
   This records a reference into the code and inserts the referenced token into the error message.
 */
-function codeRef (token) {
+function codeRef(token) {
   return (error) => {
     let index = error.references.length;
     error.message += `<span id="reference-${index}" class="code ref"><span class="${token.ASType.category}">${token.text}</span><span class="tag">[${index + 1}]</span></span>`;
@@ -529,7 +541,7 @@ function codeRef (token) {
 /*
   This records a reference into the code.
 */
-function ref (token) {
+function ref(token) {
   return (error) => {
     let index = error.references.length;
     error.message += `<span id="reference-${index}" class="code ref"><span class="tag">[${index + 1}]</span></span>`;
@@ -541,7 +553,7 @@ function ref (token) {
 /*
   This returns the formatted markup for a single token.
 */
-function code (token) {
+function code(token) {
   return `<span class="code ${token.ASType.category}">${token.text}</span>`;
 }
 
@@ -549,7 +561,7 @@ function code (token) {
 /*
   This returns a formatted description of a given type.
 */
-function typeDescriptor (node) {
+function typeDescriptor(node) {
   let ASType = node.meta.ASType;
   if (ASType === FN || ASType === FN_SIGNATURE) {
     return "function";
@@ -566,7 +578,7 @@ function typeDescriptor (node) {
 /*
   This lexifies a string and returns the formatted markup for the resulting tokens.
 */
-function R (string) {
+function R(string) {
   return lexify(string).slice(0, -1).map(code).join("");  // Remove the END_OF_INPUT token, which will insert a newline.
 }
 
@@ -574,51 +586,51 @@ function R (string) {
 // This is a table that lists runTypes that WebBS operators can operate on.
 //  operatorRunTypeConstraints() uses this to provide a helpful list of what the given operator will and won't accept.
 const operatorRunTypeConstraints = {
-  "-":              ["i32", "i64", "f32", "f64"],
-  "!":              ["i32", "i64"],
-  "!=":             ["i32", "i64", "f32", "f64"],
-  "?<":             ["f32", "f64"],
-  "?>":             ["f32", "f64"],
-  "*":              ["i32", "i64", "f32", "f64"],
-  "/":              ["i32", "i64", "f32", "f64"],
-  "&":              ["i32", "i64"],
-  "%":              ["i32", "i64"],
-  "+":              ["i32", "i64", "f32", "f64"],
-  "<":              ["i32", "i64", "f32", "f64"],
-  "<<":             ["i32", "i64"],
-  "<=":             ["i32", "i64", "f32", "f64"],
-  "==":             ["i32", "i64", "f32", "f64"],
-  ">":              ["i32", "i64", "f32", "f64"],
-  ">=":             ["i32", "i64", "f32", "f64"],
-  ">>":             ["i32", "i64"],
-  ">>>":            ["i32", "i64"],
-  "|":              ["i32", "i64"],
-  "|/|":            ["i32", "i64"],
-  "|%|":            ["i32", "i64"],
-  "|<=|":           ["i32", "i64"],
-  "|<|":            ["i32", "i64"],
-  "|>=|":           ["i32", "i64"],
-  "|>|":            ["i32", "i64"],
-  "abs":            ["f32", "f64"],
+  "-": ["i32", "i64", "f32", "f64"],
+  "!": ["i32", "i64"],
+  "!=": ["i32", "i64", "f32", "f64"],
+  "?<": ["f32", "f64"],
+  "?>": ["f32", "f64"],
+  "*": ["i32", "i64", "f32", "f64"],
+  "/": ["i32", "i64", "f32", "f64"],
+  "&": ["i32", "i64"],
+  "%": ["i32", "i64"],
+  "+": ["i32", "i64", "f32", "f64"],
+  "<": ["i32", "i64", "f32", "f64"],
+  "<<": ["i32", "i64"],
+  "<=": ["i32", "i64", "f32", "f64"],
+  "==": ["i32", "i64", "f32", "f64"],
+  ">": ["i32", "i64", "f32", "f64"],
+  ">=": ["i32", "i64", "f32", "f64"],
+  ">>": ["i32", "i64"],
+  ">>>": ["i32", "i64"],
+  "|": ["i32", "i64"],
+  "|/|": ["i32", "i64"],
+  "|%|": ["i32", "i64"],
+  "|<=|": ["i32", "i64"],
+  "|<|": ["i32", "i64"],
+  "|>=|": ["i32", "i64"],
+  "|>|": ["i32", "i64"],
+  "abs": ["f32", "f64"],
   "allocate_pages": ["i32"],
-  "cast_f32":       ["i32"],
-  "cast_f64":       ["i64"],
-  "cast_i32":       ["f32"],
-  "cast_i64":       ["f64"],
-  "ceil":           ["f32", "f64"],
-  "count_ones":     ["i32", "i64"],
-  "floor":          ["f32", "f64"],
-  "leading_zeros":  ["i32", "i64"],
-  "rotate_left":    ["i32", "i64"],
-  "rotate_right":   ["i32", "i64"],
-  "round":          ["f32", "f64"],
-  "sqrt":           ["f32", "f64"],
-  "to_f32":         ["i32", "i64", "f64"],
-  "to_f64":         ["i32", "i64", "f64"],
-  "to_i32":         ["i64", "f32", "f64"],
-  "to_i64":         ["i32", "f32", "f64"],
+  "cast_f32": ["i32"],
+  "cast_f64": ["i64"],
+  "cast_i32": ["f32"],
+  "cast_i64": ["f64"],
+  "ceil": ["f32", "f64"],
+  "count_ones": ["i32", "i64"],
+  "floor": ["f32", "f64"],
+  "leading_zeros": ["i32", "i64"],
+  "rotate_left": ["i32", "i64"],
+  "rotate_right": ["i32", "i64"],
+  "round": ["f32", "f64"],
+  "sqrt": ["f32", "f64"],
+  "to_f32": ["i32", "i64", "f64"],
+  "to_f64": ["i32", "i64", "f64"],
+  "to_i32": ["i64", "f32", "f64"],
+  "to_i64": ["i32", "f32", "f64"],
   "trailing_zeros": ["i32", "i64"],
-  "truncate":       ["f32", "f64"],
-  "with_sign_of":   ["f32", "f64"],
-  "xor":            ["i32", "i64"]
+  "truncate": ["f32", "f64"],
+  "with_sign_of": ["f32", "f64"],
+  "xor": ["i32", "i64"]
 };

@@ -20,12 +20,6 @@ export interface OperandType {
   operator: string
 }
 
-// type OperandTypes =
-//   | 'i32,i32'
-//   | 'i64,i64'
-//   | 'f32,f32'
-//   | 'f64,f64'
-
 export type Operand = Record<string, OperandType>
 
 export type Operator =

@@ -76,6 +76,7 @@ export const DECLARATION = new ASType();
 export const DEFAULT_MEMORY = new ASType();
 export const DEFAULT_TABLE = new ASType();
 export const DEFINITION = new ASType();
+export const ELEMENT = new ASType();
 export const ELSE = new ASType();
 export const END_OF_INPUT = new ASType();
 export const EQ_COMPARISON = new ASType();
@@ -84,6 +85,7 @@ export const EXPORT_TYPE = new ASType();
 export const F32_LITERAL = new ASType();
 export const F64_LITERAL = new ASType();
 export const FN = new ASType();
+export const FN_LIST = new ASType();
 export const FN_PTR = new ASType();
 export const FN_SIGNATURE = new ASType();
 export const FROM = new ASType();
@@ -159,10 +161,13 @@ recordProperties(
 
   [operands(0, 1),
   [ALLOCATE_PAGES, CALL, EXPORT, IMMUTABLE, LOOP, MEMORY_ACCESS, NEG, UNARY_MATH_OP, PTR, RETURN, YIELD]],
+
   [operands(0, 2),
-  [DEFAULT_MEMORY, DEFAULT_TABLE, FN_PTR, FN_SIGNATURE, IF]],
+  [DEFAULT_MEMORY, DEFAULT_TABLE, ELEMENT, FN_PTR, FN_SIGNATURE, IF]],
+
   [operands(0, 3),
   [FN, IMPORT]],
+
   [operands(1, 0),
   [SUFFIX_OP]],
 
@@ -173,19 +178,26 @@ recordProperties(
 
   // Open Expressions (various paren types, blocks, etc.) and their terminators
   [{ expectedChildCount: Infinity },
-  [ADDRESS, ARG_LIST, BLOCK, PARAM_LIST, PAREN, ROOT, TYPE_LIST]],
+  [ADDRESS, ARG_LIST, BLOCK, PARAM_LIST, PAREN, ROOT, TYPE_LIST, FN_LIST]],
+
   [{ ignoresTerminator: COMMA },
-  [ARG_LIST, PARAM_LIST, TYPE_LIST]],
+  [ARG_LIST, PARAM_LIST, TYPE_LIST, FN_LIST]],
+
   [{ ignoresTerminator: SEMICOLON },
   [ADDRESS, BLOCK, PAREN, ROOT]],
+
   [{ requiresTerminator: ADDRESS_CLOSE },
   [ADDRESS]],
+
   [{ requiresTerminator: BLOCK_CLOSE },
   [BLOCK]],
+
   [{ requiresTerminator: END_OF_INPUT },
   [ROOT]],
+
   [{ requiresTerminator: PAREN_CLOSE },
-  [ARG_LIST, PARAM_LIST, PAREN, TYPE_LIST]],
+  [ARG_LIST, PARAM_LIST, PAREN, TYPE_LIST, FN_LIST]],
+
   [{ isTerminator: true },
   [BLOCK_CLOSE, COMMA, END_OF_INPUT, ADDRESS_CLOSE, PAREN_CLOSE, SEMICOLON]],
 
@@ -193,12 +205,16 @@ recordProperties(
 
   [{ createsName: true },
   [DECLARATION, DEFINITION]],
+
   [{ createsNewScope: true },
   [BLOCK, FN, LOOP, ROOT]],
+
   [{ isReference: true },
   [CALL, MEMORY_ACCESS, VARIABLE]],
+
   [{ rightAssociative: true },
   [ASSIGN, ELSE, INIT_EXPR]],
+
   [{ skip: true },
   [COMMENT, WS]]
 );
@@ -264,6 +280,7 @@ DECLARATION.CTC = CTCByPos([VARIABLE], [FN_PTR, FN_SIGNATURE, IMMUTABLE, PTR, VA
 DEFAULT_MEMORY.CTC = CTCByPos([I32_LITERAL], [I32_LITERAL, VOID]);
 DEFAULT_TABLE.CTC = CTCByPos([I32_LITERAL], [I32_LITERAL, VOID]);
 DEFINITION.CTC = CTCByPos([VARIABLE], [FN, FN_PTR, IMMUTABLE, PTR, VALUE_TYPE]);
+ELEMENT.CTC = CTCByPos([I32_LITERAL], [FN_LIST]);
 ELSE.CTC = CTCByPos([IF], [BLOCK, BREAK, CONTINUE, IF, ELSE]);
 EXPORT.CTC = CTCByPos([AS, VARIABLE]);
 FN.CTC = CTCByPos([PARAM_LIST], [VALUE_TYPE, VOID], [BLOCK]);
@@ -304,8 +321,9 @@ function CTCForAll(...acceptableTypes: ASType[]): CTCFn {
 }
 
 PARAM_LIST.CTC = CTCForAll(DECLARATION);
-ROOT.CTC = CTCForAll(DEFINITION, DEFAULT_MEMORY, DEFAULT_TABLE, EXPORT, IMPORT, INIT_EXPR);
+ROOT.CTC = CTCForAll(DEFINITION, DEFAULT_MEMORY, DEFAULT_TABLE, ELEMENT, EXPORT, IMPORT, INIT_EXPR);
 TYPE_LIST.CTC = CTCForAll(VALUE_TYPE);
+// FN_LIST.CTC = CTCForAll(ELEMENT);
 
 // ADDRESS is a special case, as it has a variable (but bounded) number of children and an ASType constraint only on the second child.
 ADDRESS.CTC = ({ children }) => (children.length === 1 || (children.length === 2 && children[1].ASType === I32_LITERAL)) ? null : {};
@@ -364,6 +382,7 @@ BREAK.PTC = PTCByPos([BLOCK, null], [IF, 1], [ELSE, 1]);
 CONTINUE.PTC = PTCByPos([BLOCK, null], [IF, 1], [ELSE, 1]);
 DEFAULT_MEMORY.PTC = PTCByPos([ROOT, null], [IMPORT, 0]);
 DEFAULT_TABLE.PTC = PTCByPos([ROOT, null], [IMPORT, 0]);
+ELEMENT.PTC = PTCByPos([ROOT, null]);
 EXPORT.PTC = PTCByPos([ROOT, null]);
 FN.PTC = PTCByPos([DEFINITION, 1]);
 FN_PTR.PTC = PTCByPos([DEFINITION, 1], [DECLARATION, 1]);
@@ -435,7 +454,7 @@ YIELD.PTC = PTCByPos([BLOCK, null]);
 
 [
   [DEFINITION, DECLARATION, AS],
-  [CALL, DEFAULT_MEMORY, DEFAULT_TABLE, FN, FN_PTR, FN_SIGNATURE, EXPORT, IF, IMMUTABLE, IMPORT, MEMORY_ACCESS, PTR],
+  [CALL, DEFAULT_MEMORY, DEFAULT_TABLE, ELEMENT, FN, FN_PTR, FN_SIGNATURE, EXPORT, IF, IMMUTABLE, IMPORT, MEMORY_ACCESS, PTR],
   [ELSE],
   [SUFFIX_OP],
   [LOOP, NEG, UNARY_MATH_OP],
@@ -511,6 +530,8 @@ export function getASType(ASType: ASType, parentType: ASType) {
     } else if (parentType === FN_PTR || parentType === FN_SIGNATURE) {
       // As part of an imported function definition, a parenthetical is a list of parameter types (without names).
       return TYPE_LIST;
+    } else if (parentType === ELEMENT) {
+      return FN_LIST;
     }
 
   } else if (parentType === IMPORT || parentType === PARAM_LIST) {

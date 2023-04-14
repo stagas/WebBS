@@ -27,6 +27,7 @@ export function generateModule(root: ASTNode) {
   generateGlobalSection(root.scope, module);
   generateExportSection(root.scope, module);
   generateStartSection(root.scope, module);
+  generateElementsSection(root.scope, module);
   generateCodeSection(root.scope, module);
 
   return module;
@@ -179,6 +180,44 @@ function generateTableSection(source: Scope, module: ByteCodeContainer) {
   section.finishSection();
 }
 
+/*
+  The element section defines elements in the table (currently only functions).
+*/
+function generateElementsSection(source: Scope, module: ByteCodeContainer) {
+  let section = module.section("elements section");
+  let count = source.elements.length;
+
+  section
+    .byte("section.element", "id")
+    .reserveSize("payload_len")
+    .varuint(count, "count");
+
+  for (let { offsetIndex, elements } of source.elements) {
+    let el = section
+      .section("element")
+      .varuint(0, "table_index")
+
+      .section("offset_expr")
+      .generate(offsetIndex, 0)
+      .op("end")
+      .finishSection()!;
+
+    let indices = el
+      .section("element_indices")
+      .reserveSize("elements_len");
+
+    for (let element of elements) {
+      indices.varuint(element.meta.index, `fn ${element.meta.index} (${element.meta.name})|fn_index`);
+    }
+
+    indices.finishSection();
+
+    el.finishSection();
+  }
+
+  section.finishSection();
+}
+
 
 /*
   The memory section defines a non-imported default memory store, if necessary.
@@ -236,7 +275,7 @@ function generateGlobalSection(source: Scope, module: ByteCodeContainer) {
   The export section is a list of exported functions, globals, tables and memory stores.
   Each export assigned a name and then specified via an external kind and an reference into the respective index space.
 */
-function generateExportSection(source, module) {
+function generateExportSection(source: Scope, module: ByteCodeContainer) {
   let section = module.section("export section");
   let count = source.exports.length;
 
@@ -249,7 +288,7 @@ function generateExportSection(source, module) {
     for (let { exportName, kind, index } of source.exports) {
       section
         .section(`${exportName}`)
-        .string(exportName, "field")
+        .string(`${exportName}`, "field")
         .byte(`external_kind.${kind}`, "kind",)
         .varuint(index, "index")
         .finishSection();
