@@ -1,0 +1,16 @@
+{
+  "name": "webbs",
+  "version": "1.0.0",
+  "description": "__WebBS__ (short for \"(Web)Assembly (B)etter (S)yntax\") is a simple byte-twiddling language that compiles to WebAssembly bytecode.",
+  "main": "client.js",
+  "scripts": {
+    "start": "devito index.html"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "devito": "^2.1.0",
+    "typescript": "^5.0.4"
+  }
+}

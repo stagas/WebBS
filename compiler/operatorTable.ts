@@ -13,7 +13,8 @@
     pages_allocated   0-ary current memory allocated query
 */
 
-import { RunType } from './parser';
+import { RunType } from "./parser.js";
+
 
 export interface OperandType {
   returnType: RunType

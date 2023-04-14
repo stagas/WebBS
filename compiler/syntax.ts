@@ -25,30 +25,32 @@
       and allows the process of defining (most of) the syntax to follow a logical sequence, so it seems like a good overall strategy.
 */
 
-import { ASTNode } from './parser'
+import { ASTNode } from "./parser.js";
+
 
 export class ASType {
   ASType: ASType
 
-  skip = false              // Boolean; should the parser ignore this sort of token entirely (true for WS and COMMENT, false otherwise)?
+  skip = false              // Should the parser ignore this sort of token entirely (true for WS and COMMENT, false otherwise)?
 
-  leftOperands = 0          // How many operands should the parser expect to the left of this type of node? Either 0 or 1.
-  rightOperands = 0         // How many operands should the parser expect to the right of this type of node?
-  expectedChildCount = 0    // What's the (maximum) number of children to count before marking this node as finished?
+  leftOperands = 0           // How many operands should the parser expect to the left of this type of node? Either 0 or 1.
+  rightOperands = 0          // How many operands should the parser expect to the right of this type of node?
+  expectedChildCount = 0     // What's the (maximum) number of children to count before marking this node as finished?
   //    This is Infinity for open expressions, and equal to .leftOperands plus .rightOperands otherwise.
-  CTC: CTCFn = () => null          // Child Type Constraint function - see the CTC section below.
-  PTC: PTCFn = () => false         // Parent Type Constraint function - see the PTC section below.
+
+  CTC: CTCFn = () => null      // Child Type Constraint function - see the CTC section below.
+  PTC: PTCFn = () => false    // Parent Type Constraint function - see the PTC section below.
 
   requiresTerminator: ASType | null = null // For open expressions, this is the ASType of tokens that close the expression (e.g. PAREN_CLOSE for PAREN).
   ignoresTerminator: ASType | null = null  // For open expressions, this is an ASType that should be considered a "separator" (e.g. COMMA for ARG_LIST).
-  isTerminator = false      // Boolean; does this token type terminate the current expression (unless exempted by .ignoresTerminator)?
+  isTerminator = false      // Does this token type terminate the current expression (unless exempted by .ignoresTerminator)?
 
-  precedence = -Infinity    // The precedence to use for operator parsing conflicts. Higher wins.
+  precedence = -Infinity     // The precedence to use for operator parsing conflicts. Higher wins.
   rightAssociative = false  // This sets the associativity rule for operators with equal precedence - see the precedence tiers docs below.
 
-  createsNewScope = false   // Boolean; does this node mark the beginning of a new scope (in which all its children will be placed)?
-  createsName = false       // Boolean; does this node create a new named entity (e.g. variable definitions and such)?
-  isReference = false        // Boolean; does this node reference a named entity (and thus require name resolution)?
+  createsNewScope = false   // Does this node mark the beginning of a new scope (in which all its children will be placed)?
+  createsName = false       // Does this node create a new named entity (e.g. variable definitions and such)?
+  isReference = false       // Does this node reference a named entity (and thus require name resolution)?
 
 }
 
@@ -136,19 +138,6 @@ function recordProperties(...syntaxRules: [Partial<ASType>, ASType[]][]) {
     }
   }
 }
-
-
-/*
-  Record default property values for all ASTypes.
-*/
-
-// recordProperties([
-//   {
-//   },
-
-//   // The following array is automatically populated by a script.
-//   [ /* ALL_ASTYPES */ ADD, ADDRESS, ADDRESS_CLOSE, ALLOCATE_PAGES, AND, ARG_LIST, AS, ASSIGN, BAD_TOKEN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, BLOCK, BLOCK_CLOSE, BREAK, CALL, COMMA, COMMENT, CONTINUE, DECLARATION, DEFAULT_MEMORY, DEFAULT_TABLE, DEFINITION, ELSE, END_OF_INPUT, EQ_COMPARISON, EXPORT, EXPORT_TYPE, F32_LITERAL, F64_LITERAL, FN, FN_PTR, FN_SIGNATURE, FROM, I32_LITERAL, I64_LITERAL, IF, IMMUTABLE, IMPORT, INIT_EXPR, LOOP, MEMORY_ACCESS, MISC_INFIX, NEG, OR, ORDER_COMPARISON, PAGES_ALLOCATED, PARAM_LIST, PAREN, PAREN_CLOSE, PASS, PTR, RETURN, ROOT, SCALE_OP, SEMICOLON, STRING, STORAGE_TYPE, SUB, SUFFIX_OP, TYPE_LIST, UNARY_MATH_OP, VALUE_TYPE, VARIABLE, VOID, WS, YIELD /* END_ALL_ASTYPES */ ],
-// ]);
 
 
 /*

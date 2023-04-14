@@ -99,19 +99,19 @@ body {
 }
 
 #editor.show-referent-0>.referent-0::before,
-#editor.show-referent-1>.referent-1::before { 
-	border: solid transparent;
-	border-color: rgba(0, 0, 0, 0);
+#editor.show-referent-1>.referent-1::before {
+  border: solid transparent;
+  border-color: rgba(0, 0, 0, 0);
   border-bottom-color: var(--error);
-	border-width: 9px;
-	bottom: -8px;
-	content: " ";
-	height: 0;
-	left: 1ch;
+  border-width: 9px;
+  bottom: -8px;
+  content: " ";
+  height: 0;
+  left: 1ch;
   margin-left: -9px;
-	pointer-events: none;
-	position: absolute;
-	width: 0;
+  pointer-events: none;
+  position: absolute;
+  width: 0;
   z-index: 1;
 }
 
@@ -124,7 +124,7 @@ body {
   align-items: stretch;
   display: flex;
   flex-direction: column;
-  height: 100vh;  
+  height: 100vh;
   width: 50vw;
 }
 
@@ -259,47 +259,47 @@ body {
 }
 
 #parse-tree .ast-node>.node-info.type {
-  border-top: 4px solid  var(--token-type);
+  border-top: 4px solid var(--token-type);
 }
 
 #parse-tree .ast-node>.node-info.bad-token {
-  border-top: 4px solid  var(--bad-token);
+  border-top: 4px solid var(--bad-token);
 }
 
 #parse-tree .ast-node>.node-info.paren {
-  border-top: 4px solid  var(--token-paren);
+  border-top: 4px solid var(--token-paren);
 }
 
 #parse-tree .ast-node>.node-info.block {
-  border-top: 4px solid  var(--token-block);
+  border-top: 4px solid var(--token-block);
 }
 
 #parse-tree .ast-node>.node-info.keyword {
-  border-top: 4px solid  var(--token-keyword);
+  border-top: 4px solid var(--token-keyword);
 }
 
 #parse-tree .ast-node>.node-info.fn {
-  border-top: 4px solid  var(--token-fn);
+  border-top: 4px solid var(--token-fn);
 }
 
 #parse-tree .ast-node>.node-info.address {
-  border-top: 4px solid  var(--token-address);
+  border-top: 4px solid var(--token-address);
 }
 
 #parse-tree .ast-node>.node-info.literal {
-  border-top: 4px solid  var(--token-literal);
+  border-top: 4px solid var(--token-literal);
 }
 
 #parse-tree .ast-node>.node-info.operator {
-  border-top: 4px solid  var(--token-operator);
+  border-top: 4px solid var(--token-operator);
 }
 
 #parse-tree .ast-node>.node-info.ignore {
-  border-top: 4px solid  var(--token-ignore);
+  border-top: 4px solid var(--token-ignore);
 }
 
 #parse-tree .ast-node>.node-info.default {
-  border-top: 4px solid  var(--token-default);
+  border-top: 4px solid var(--token-default);
 }
 
 
@@ -311,11 +311,11 @@ body {
   white-space: pre;
 }
 
-#bytecode > div > span.bytes {
+#bytecode>div>span.bytes {
   color: var(--em);
 }
 
-#bytecode > div > span.annotation {
+#bytecode>div>span.annotation {
   opacity: 0.5;
 }
 
@@ -342,6 +342,7 @@ body {
 */
 
 #splash {
+  font-family: "IBM-VGA9";
   background-color: var(--token-type);
   color: var(--em);
   height: min-content;
@@ -390,7 +391,7 @@ body {
 }
 
 .button:hover {
-  background:var(--token-fn);
+  background: var(--token-fn);
 }
 
 .button:active {
@@ -446,4 +447,3 @@ body {
 .ignore {
   color: var(--token-ignore);
 }
-

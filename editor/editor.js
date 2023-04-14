@@ -1,19 +1,20 @@
-import { /* ALL_ASTYPES */ ADD, ADDRESS, ADDRESS_CLOSE, ALLOCATE_PAGES, AND, ARG_LIST, AS, ASSIGN, BAD_TOKEN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, BLOCK, BLOCK_CLOSE, BREAK, CALL, COMMA, COMMENT, CONTINUE, DECLARATION, DEFAULT_MEMORY, DEFAULT_TABLE, DEFINITION, ELSE, END_OF_INPUT, EQ_COMPARISON, EXPORT, EXPORT_TYPE, F32_LITERAL, F64_LITERAL, FN, FN_PTR, FN_SIGNATURE, FROM, I32_LITERAL, I64_LITERAL, IF, IMMUTABLE, IMPORT, INIT_EXPR, LOOP, MEMORY_ACCESS, MISC_INFIX, NEG, OR, ORDER_COMPARISON, PAGES_ALLOCATED, PARAM_LIST, PAREN, PAREN_CLOSE, PASS, PTR, RETURN, ROOT, SCALE_OP, SEMICOLON, STRING, STORAGE_TYPE, SUB, SUFFIX_OP, TYPE_LIST, UNARY_MATH_OP, VALUE_TYPE, VARIABLE, VOID, WS, YIELD /* END_ALL_ASTYPES */ } from "/WebBS/compiler/syntax.js";
-import {lexify} from "/WebBS/compiler/lexer.js";
-import {parse} from "/WebBS/compiler/parser.js";
-import {generateModule} from "/WebBS/compiler/moduleCodeGen.js";
-import {generateErrorMessage} from "/WebBS/editor/errorMessages.js";
+import { lexify } from "../compiler/lexer.js";
+import { generateModule } from "../compiler/moduleCodeGen.js";
+import { parse } from "../compiler/parser.js";
+import { ADD, ADDRESS, ADDRESS_CLOSE, ALLOCATE_PAGES, AND, ARG_LIST, AS, ASSIGN, BAD_TOKEN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, BLOCK, BLOCK_CLOSE, BREAK, CALL, COMMA, COMMENT, CONTINUE, DECLARATION, DEFAULT_MEMORY, DEFAULT_TABLE, DEFINITION, ELEMENT, ELSE, END_OF_INPUT, EQ_COMPARISON, EXPORT, EXPORT_TYPE, F32_LITERAL, F64_LITERAL, FN, FN_LIST, FN_PTR, FN_SIGNATURE, FROM, I32_LITERAL, I64_LITERAL, IF, IMMUTABLE, IMPORT, INIT_EXPR, LOOP, MEMORY_ACCESS, MISC_INFIX, NEG, OR, ORDER_COMPARISON, PAGES_ALLOCATED, PARAM_LIST, PAREN, PAREN_CLOSE, PASS, PTR, RETURN, ROOT, SCALE_OP, SEMICOLON, STORAGE_TYPE, STRING, SUB, SUFFIX_OP, TYPE_LIST, UNARY_MATH_OP, VALUE_TYPE, VARIABLE, VOID, WS, YIELD } from "../compiler/syntax.js";
+import { generateErrorMessage } from "../editor/errorMessages.js";
+
 
 /*
   This class implements the WebBS editor user interface.
   It attaches itself to pre-existing DOM nodes (see index.html), and intercepts/handles user input.
-  The main editor DOM node is a contenteditable element. 
+  The main editor DOM node is a contenteditable element.
 */
 export class Editor {
-  constructor (text = "") {
+  constructor(text = "") {
     this.text = text.replace(/\r/g, ""); // The current text of the editor element (stripped of rogue \r characters).
     this.tokens = []; // A list of tokens - the value of this.text run through the lexer.
-    this.selection = {start: 0, end: 0, backwards: false, isCollapsed: true}; // Useful information about the currently selected text.
+    this.selection = { start: 0, end: 0, backwards: false, isCollapsed: true }; // Useful information about the currently selected text.
     this.editHistory = []; // Edit history (for "undo" functionality).
     this.redoStack = [];  // For "redo" functionality; reset upon change.
     this.module = null; // If we successfully compile a WebAssembly module, we store it here so we can instantiate it when needed.
@@ -30,7 +31,7 @@ export class Editor {
       statusMessage: document.getElementById("status-message"),
       statusTitle: document.getElementById("status-title")
     };
-    
+
     this.DOMNodes.editor.addEventListener("keydown", (event) => this.keyDown(event));
     this.DOMNodes.editor.addEventListener("cut", (event) => this.cut(event));
     this.DOMNodes.editor.addEventListener("paste", (event) => this.paste(event));
@@ -38,28 +39,25 @@ export class Editor {
     this.DOMNodes.buildButton.addEventListener("mousedown", () => this.compile());
     this.DOMNodes.runButton.addEventListener("mousedown", () => this.run());
     document.addEventListener("selectionchange", (event) => this.selectionChange(event));
-    
+
     // Register and create event handlers for the tabs on the right-hand panel.
     this.tabs = Object.create(null);
     this.createTab("status", true),
-    this.createTab("output", false),
-    this.createTab("parse-tree", false),
-    this.createTab("bytecode", false),
-    this.createTab("about", true),
-    this.selectTab("about");
-    
-    this.initializeModuleDependencyProvider();
-    this.edit({start: 0, end: 0, insert: "", postSelection: this.selection});  // This gets the editor DOM in the right state for editing.
+      this.createTab("output", false),
+      this.createTab("parse-tree", false),
+      this.createTab("bytecode", false),
+      this.createTab("about", true),
+      this.selectTab("about");
 
-    window.WebBSEditor = this;
-    console.log(`For advanced instructions, run "WebBSEditor.help()"`);
+    this.initializeModuleDependencyProvider();
+    this.edit({ start: 0, end: 0, insert: "", postSelection: this.selection });  // This gets the editor DOM in the right state for editing.
   }
-  
-  
+
+
   /*
     Inserts a newline, followed by the appropriate amount of indentation based on the scope.
   */
-  autoIndentNewLine (start, end) {
+  autoIndentNewLine(start, end) {
     for (var i = start, scopeDiff = 0; i > 0; i--) {
       let char = this.text[i - 1];
       if (char === '\n') {
@@ -75,7 +73,7 @@ export class Editor {
 
     let result = initialWhiteSpace.exec(this.text.substring(i, start));
     let indentation = result ? result[0] : "";
-    
+
     if (scopeDiff === 1) {
       initialCloseParen.lastIndex = end;
       let suffix = initialCloseParen.exec(this.text) ? "\n" + indentation : "";
@@ -89,7 +87,7 @@ export class Editor {
   /*
     Attempts to compile the WebBS code in the editor into a WebAssembly module.
   */
-  compile () {
+  compile() {
     this.DOMNodes.log.innerHTML = ""; // Reset the output log.
     this.disableTab("output");
     this.disableTab("parse-tree");
@@ -97,7 +95,8 @@ export class Editor {
     try {
       root = parse(this.tokens);  // Parse the tokens from the lexer into a WebBS AST.
       this.updateParseTreeTab(root); // Update and re-enable the AST tab.
-    } catch (error) {  
+    } catch (error) {
+      console.error('Error is:', error)
       this.showErrorMessage(error);
       return;
     }
@@ -105,7 +104,7 @@ export class Editor {
     try {
       let module = generateModule(root);  // Generate bytecode from the AST and update the Bytecode tab.
       this.updateByteCodeTab(module);
-      
+
       this.module = new WebAssembly.Module(module.toByteArray()); // Compile a WebAssembly module from the bytecode.
       this.DOMNodes.statusTitle.innerHTML = "Success!";
       this.DOMNodes.statusTitle.className = "success";
@@ -118,13 +117,13 @@ export class Editor {
     }
   }
 
-  
+
   /*
     Registers a tab in this.tabs and adds the appropriate mouse listener.
     The first parameter is a string ID that we use to find the tab and its contents in the DOM.
     The second parameter is a Boolean that determines whether the tab is initially enabled.
   */
-  createTab (id, enabled) {
+  createTab(id, enabled) {
     let tabData = this.tabs[id] = {
       id,
       DOMNode: document.getElementById(id + "-tab"),
@@ -143,7 +142,7 @@ export class Editor {
   /*
     We manually override the effects of cutting from the document in order to keep the highlighting and internal state consistent.
   */
-  cut (event) {
+  cut(event) {
     event.preventDefault();
     event.stopPropagation();
     document.execCommand("copy");
@@ -154,7 +153,7 @@ export class Editor {
   /*
     Marks a tab (specified by ID) as disabled, thereby preventing the user from selecting it.
   */
-  disableTab (id) {
+  disableTab(id) {
     let tabData = this.tabs[id];
     tabData.enabled = false;
     tabData.DOMNode.classList.add("disabled");
@@ -163,11 +162,11 @@ export class Editor {
     }
   }
 
-  
+
   /*
     Edits the text, lexifies the result, renders the syntax highlighted tokens and otherwise updates the UI.
   */
-  edit ({start, end, insert, postSelection}) {
+  edit({ start, end, insert, postSelection }) {
     // Edit the text and lexify the results.
     this.text = this.text.slice(0, start) + insert + this.text.slice(end);
     this.tokens = lexify(this.text);
@@ -195,11 +194,11 @@ export class Editor {
     this.DOMNodes.runButton.className = "button disabled";  // Disable the run button on edit - the user will need to re-build first.
   }
 
-  
+
   /*
     Marks a tab (specified by ID) as enabled, thereby allowing the user to select and interact with it.
   */
-  enableTab (id) {
+  enableTab(id) {
     let tabData = this.tabs[id];
     tabData.enabled = true;
     tabData.DOMNode.classList.remove("disabled");
@@ -209,7 +208,7 @@ export class Editor {
   /*
     Prints some instructions for providing a custom module dependency provider.
   */
-  help () {
+  help() {
     console.log(`
     Hello!
     If you want to play around with the imports provided to your WebBS module, or code that uses your module's exports, you need to provide the WebBS editor with a new module dependency provider function.
@@ -227,13 +226,13 @@ export class Editor {
     return "Good Luck!";
   }
 
-  
+
   /*
     Implements smart indentation for selected text.
     Its parameters are the start/end points of a text range,
       and an optional Boolean where "true" indicates that we want to un-indent rather than indent the selected text.
   */
-  indentLines (start, end, backwards = false) {
+  indentLines(start, end, backwards = false) {
     for (var i = start; i > 0 && this.text[i - 1] !== '\n'; i--);
 
     let replace = this.text.slice(i, end);
@@ -255,7 +254,7 @@ export class Editor {
       insert,
       replace,
       preSelection: this.selection,
-      postSelection: {start: postStart, end: postEnd, isCollapsed: postStart === postEnd, backwards: this.selection.backwards}
+      postSelection: { start: postStart, end: postEnd, isCollapsed: postStart === postEnd, backwards: this.selection.backwards }
     };
     this.edit(edit);
     this.editHistory.push(edit);
@@ -267,9 +266,9 @@ export class Editor {
     This creates a default module dependency provider (which determines what happens when your WebBS module is instantiated).
     The default module dependency provider provides the imports that the editor's example code needs to run.
   */
-  initializeModuleDependencyProvider () {
+  initializeModuleDependencyProvider() {
     this.moduleDependencyProvider = (editor) => {
-      let memory = new WebAssembly.Memory({initial: 64});
+      let memory = new WebAssembly.Memory({ initial: 64 });
       return {
         imports: {
           WebBS: {
@@ -286,9 +285,9 @@ export class Editor {
           }
         },
 
-        onInit: (instance) => {}
+        onInit: (instance) => { }
       };
-    };    
+    };
   }
 
 
@@ -297,7 +296,7 @@ export class Editor {
     Only navigation keys and cut/copy/paste shortcuts are allowed to pass directly through to the editor.
     Everything else we either handle in some custom way, or ignore.
   */
-  keyDown (event) {
+  keyDown(event) {
     if (navKeys.includes(event.key) || event.ctrlKey || event.metaKey) {
       // Intercept and replace undo/redo with our custom versions, otherwise let nav keys and ctrl/command shortcuts go through.
       if (event.key === "z") {
@@ -320,9 +319,9 @@ export class Editor {
     event.preventDefault();
     event.stopPropagation();
 
-    let {start, end, isCollapsed} = this.selection;
+    let { start, end, isCollapsed } = this.selection;
     let insert = event.key;
-    
+
     switch (event.key) {
       case "Enter": { // Insert a newline and the appropriate amount of indentation.
         return this.autoIndentNewLine(start, end);
@@ -366,21 +365,21 @@ export class Editor {
       case "(": { // If text is selected, we wrap it with (), rather than replacing it.
         if (!isCollapsed) return this.wrapText(start, end, "(", ")");
       } break;
-      
+
       default: {  // Ignore anything with a weird key name, but allow typed characters to pass through.
-        if (event.key.length > 1) return; 
+        if (event.key.length > 1) return;
       } break;
     }
 
     // If we get here, the start, end and insert variables have all the information we need to edit the text.
-    this.replaceText(start, end, insert); 
+    this.replaceText(start, end, insert);
   }
 
 
   /*
     Writes to the Output tab - exposed to WebBS programs in the editor, so they can generate output.
   */
-  logOutput (msg) {
+  logOutput(msg) {
     this.DOMNodes.runMessage.className = "hidden";
     let node = document.createElement("div");
     node.innerHTML = msg;
@@ -391,13 +390,13 @@ export class Editor {
   /*
     We manually override the effects of pasting into the document in order to keep the highlighting and internal state consistent.
   */
-  paste (event) {
+  paste(event) {
     event.preventDefault();
     event.stopPropagation();
     this.replaceText(this.selection.start, this.selection.end, event.clipboardData.getData("text"));
   }
 
-  
+
   /*
     This performs the most common kind of text editing operation by:
       1. Constructing an edit specification object from the most common parameters
@@ -409,7 +408,7 @@ export class Editor {
       and an optional offset, which determines how much to move the caret
         (where the default 0 value places it at the end of the edit region).
   */
-  replaceText (start, end, insertText, offset = 0) {
+  replaceText(start, end, insertText, offset = 0) {
     let insert = insertText.replace(/\r/g, ""); // Prevent rogue \r characters from showing up in the text and causing havoc.
     let postPos = start + insert.length + offset;
     let edit = {
@@ -418,7 +417,7 @@ export class Editor {
       insert,
       replace: this.text.slice(start, end), // Record the text that's currently in the edit region, so we can undo this change if needed.
       preSelection: this.selection,
-      postSelection: {start: postPos, end: postPos, isCollapsed: true, backwards: false}
+      postSelection: { start: postPos, end: postPos, isCollapsed: true, backwards: false }
     };
     this.edit(edit);
     this.editHistory.push(edit);
@@ -429,7 +428,7 @@ export class Editor {
   /*
     Redoes the last undone edit (if possible).
   */
-  redo () {
+  redo() {
     if (this.redoStack.length === 0) return;
 
     let edit = reverseInput(this.redoStack.pop());
@@ -441,9 +440,9 @@ export class Editor {
   /*
     If we have a successfully compiled WebAssembly module, this instantiates it.
   */
-  run () {
+  run() {
     if (this.module !== null) {
-      let {imports = {}, onInit = () => {}} = this.moduleDependencyProvider(this);
+      let { imports = {}, onInit = () => { } } = this.moduleDependencyProvider(this);
       this.selectTab(this.tabs["output"]);
       this.logOutput("<em>RUNNING...</em>");
       WebAssembly.instantiate(this.module, imports).then((instance) => {
@@ -459,8 +458,8 @@ export class Editor {
   /*
     We track the user's selection (which includes the position of the editor caret) with this method.
   */
-  selectionChange (event) {
-    let {anchorNode, anchorOffset, focusNode, focusOffset, isCollapsed} = document.getSelection();
+  selectionChange(event) {
+    let { anchorNode, anchorOffset, focusNode, focusOffset, isCollapsed } = document.getSelection();
     let editorNode = this.DOMNodes.editor;
 
     // If the editor DOM element isn't selected, or the selection crosses outside of it, we bail.
@@ -486,15 +485,15 @@ export class Editor {
 
     // Scroll the cursor into view if necessary.
     if (focusNode.offsetTop < editorNode.scrollTop) {
-      focusNode.scrollIntoView({block: "start"});
+      focusNode.scrollIntoView({ block: "start" });
     } else if (focusNode.offsetTop + 16 > editorNode.scrollTop + editorNode.clientHeight) {
-      focusNode.scrollIntoView({block: "end"});
+      focusNode.scrollIntoView({ block: "end" });
     } else if (focusNode.offsetLeft < editorNode.scrollLeft) {
-      focusNode.scrollIntoView({inline: "start"});
-    } else if (focusNode.offsetLeft + focusNode.clientWidth> editorNode.scrollLeft + editorNode.clientWidth) {
-      focusNode.scrollIntoView({inline: "end"});
+      focusNode.scrollIntoView({ inline: "start" });
+    } else if (focusNode.offsetLeft + focusNode.clientWidth > editorNode.scrollLeft + editorNode.clientWidth) {
+      focusNode.scrollIntoView({ inline: "end" });
     }
-    
+
     let startToken = anchorNode.token;
     let endToken = focusNode.token;
     let start = startToken.pos + anchorOffset;
@@ -504,15 +503,15 @@ export class Editor {
       [start, end] = [end, start];
       backwards = true;
     }
-    
-    this.selection = {start, end, isCollapsed, backwards};
+
+    this.selection = { start, end, isCollapsed, backwards };
   }
 
-  
+
   /*
     Marks a tab as selected (and thus visible).
   */
-  selectTab (tabData) {
+  selectTab(tabData) {
     if (tabData.enabled) {
       this.selectedTab = tabData;
       this.DOMNodes.panel.dataset.selected = tabData.id;
@@ -523,7 +522,7 @@ export class Editor {
   /*
     Generates and displays a relevant message about an error of some sort (generally thrown by the compiler).
   */
- showErrorMessage (error) {
+  showErrorMessage(error) {
     let displayError = generateErrorMessage(error);
 
     this.DOMNodes.statusTitle.innerHTML = "Error!";
@@ -535,9 +534,10 @@ export class Editor {
       let reference = document.getElementById(`reference-${index}`);
       reference.addEventListener("mouseover", () => this.DOMNodes.editor.classList.add(`show-referent-${index}`));  // This is a CSS hack.
       reference.addEventListener("mouseleave", () => this.DOMNodes.editor.classList.remove(`show-referent-${index}`));
-      reference.addEventListener("click", () => textReferenced.DOMNode.scrollIntoView({block: "center"}));
+      reference.addEventListener("click", () => textReferenced.DOMNode.scrollIntoView({ block: "center" }));
       textReferenced.DOMNode.classList.add("error");
       textReferenced.DOMNode.classList.add(`referent-${index}`);
+      setTimeout(() => reference.click())
     }
 
     this.selectTab(this.tabs["status"]);  // Automatically switch to the status tab to display the error.
@@ -547,7 +547,7 @@ export class Editor {
   /*
     Pops from the edit history stack (if possible) and returns the editor to the previous state.
   */
-  undo () {
+  undo() {
     if (this.editHistory.length === 0) return;
 
     let edit = reverseInput(this.editHistory.pop());
@@ -555,11 +555,11 @@ export class Editor {
     this.redoStack.push(edit);
   }
 
-  
+
   /*
     Updates the Bytecode tab with an annotated view of the bytecode generated by the WebBS code generator.
   */
-  updateByteCodeTab (module) {
+  updateByteCodeTab(module) {
     let markup = "";
     let prevPath = [];
     let position = 0;
@@ -582,11 +582,11 @@ export class Editor {
     this.enableTab("bytecode");
   }
 
-  
+
   /*
     Updates the AST tab with a visualization of the structure of the AST generated by the WebBS parser.
   */
-  updateParseTreeTab (root) {
+  updateParseTreeTab(root) {
     let html = root.children.map(createParseTreeView).join("");
     if (html === "") {
       this.disableTab("parse-tree");
@@ -595,11 +595,11 @@ export class Editor {
     this.enableTab("parse-tree");
   }
 
-  
+
   /*
     Wraps selected text with a prefix and suffix, while maintaining the selection.
   */
-  wrapText (start, end, prefix, suffix) {
+  wrapText(start, end, prefix, suffix) {
     let replace = this.text.slice(start, end);
     let edit = {
       start,
@@ -630,14 +630,14 @@ const allNewLineTabs = /\n\t/g;
 const initialWhiteSpace = /^\s+/;
 const initialCloseParen = / *}/y;
 const navKeys = ["Home", "End", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "PageUp", "PageDown", "Insert"];
-const HTMLEscapeReplacements = {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#x27;", "/": "&#x2F;"};
+const HTMLEscapeReplacements = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#x27;", "/": "&#x2F;" };
 const HTMLCharsToEscape = /[&<>"'\/]/g;
 
 
 /*
   This recursively generates the markup for the AST visualization in the AST tab.
 */
-function createParseTreeView  (node) {
+function createParseTreeView(node) {
   let text = node.token.text.replace(HTMLCharsToEscape, (match) => HTMLEscapeReplacements[match]);
   let nodeInfo = `<div class="node-info ${node.ASType.category}">${text}</div>`;
   let nodeChildren = `<div class="node-children">${node.children.map(createParseTreeView).join("")}</div>`;
@@ -647,9 +647,9 @@ function createParseTreeView  (node) {
 
 /*
   Given an edit specification object, return another that exactly reverses the effects of the specified edit operation.
-  This is used by .undo() and .redo() in the Editor class above. 
+  This is used by .undo() and .redo() in the Editor class above.
 */
-function reverseInput ({start, end, insert, replace, preSelection, postSelection}) {
+function reverseInput({ start, end, insert, replace, preSelection, postSelection }) {
   return {
     start,
     end: end - (replace.length - insert.length),
@@ -664,7 +664,7 @@ function reverseInput ({start, end, insert, replace, preSelection, postSelection
 /*
   Formats a byte into a 2-digit hexadecimal representation.
 */
-function toHex (byte) {
+function toHex(byte) {
   let hex = byte.toString(16);
   return hex.length === 1 ? "0" + hex : hex;
 }
@@ -676,7 +676,7 @@ function toHex (byte) {
     this stateful container.
 */
 class Selector {
-  constructor ({start, end}) {
+  constructor({ start, end }) {
     this.anchor = {
       pos: start,
       DOMNode: null,
@@ -692,7 +692,7 @@ class Selector {
     this.targets = [this.anchor, this.focus];
   }
 
-  next (token) {
+  next(token) {
     let target = this.targets[0];
     if (target !== undefined) {
       if (token.pos + token.length > target.pos) {
@@ -704,9 +704,9 @@ class Selector {
     }
   }
 
-  setSelection () {
-    let {DOMNode: anchorNode, offset: anchorOffset} = this.anchor;
-    let {DOMNode: focusNode, offset: focusOffset} = this.focus;
+  setSelection() {
+    let { DOMNode: anchorNode, offset: anchorOffset } = this.anchor;
+    let { DOMNode: focusNode, offset: focusOffset } = this.focus;
 
     anchorNode = anchorNode.firstChild || anchorNode;
     focusNode = focusNode.firstChild || focusNode;
@@ -721,19 +721,19 @@ class Selector {
   Mutating the imported ASType objects like this is perhaps a silly thing to do, but it makes syntax highlighting very concise and simple.
 */
 const categories = {
-  "":           [END_OF_INPUT, ROOT],
-  "address":    [ADDRESS, ADDRESS_CLOSE, PTR],
-  "bad-token":  [BAD_TOKEN],
-  "block":      [BLOCK, BLOCK_CLOSE],
-  "default":    [CALL, MEMORY_ACCESS, VARIABLE],
-  "fn":         [FN, FN_SIGNATURE, FN_PTR],
-  "ignore":     [COMMA, COMMENT, SEMICOLON],
-  "keyword":    [ALLOCATE_PAGES, AS, BREAK, CONTINUE, ELSE, EXPORT, FROM, IF, IMPORT, LOOP, PAGES_ALLOCATED, PASS, RETURN, YIELD],
-  "literal":    [F32_LITERAL, F64_LITERAL, I32_LITERAL, I64_LITERAL, STRING],
-  "operator":   [ADD, AND, ASSIGN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, DECLARATION, DEFINITION, EQ_COMPARISON, INIT_EXPR, MISC_INFIX, NEG, OR, ORDER_COMPARISON, SCALE_OP, SUB, SUFFIX_OP, UNARY_MATH_OP],
-  "paren":      [ARG_LIST, PARAM_LIST, PAREN, PAREN_CLOSE, TYPE_LIST],
-  "type":       [DEFAULT_MEMORY, DEFAULT_TABLE, IMMUTABLE, STORAGE_TYPE, VALUE_TYPE, VOID],
-  "ws":         [WS]
+  "": [END_OF_INPUT, ROOT],
+  "address": [ADDRESS, ADDRESS_CLOSE, PTR],
+  "bad-token": [BAD_TOKEN],
+  "block": [BLOCK, BLOCK_CLOSE],
+  "default": [CALL, MEMORY_ACCESS, VARIABLE],
+  "fn": [FN, FN_SIGNATURE, FN_PTR],
+  "ignore": [COMMA, COMMENT, SEMICOLON],
+  "keyword": [ALLOCATE_PAGES, AS, BREAK, CONTINUE, ELSE, EXPORT, FROM, IF, IMPORT, LOOP, PAGES_ALLOCATED, PASS, RETURN, YIELD],
+  "literal": [F32_LITERAL, F64_LITERAL, I32_LITERAL, I64_LITERAL, STRING],
+  "operator": [ADD, AND, ASSIGN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, DECLARATION, DEFINITION, EQ_COMPARISON, INIT_EXPR, MISC_INFIX, NEG, OR, ORDER_COMPARISON, SCALE_OP, SUB, SUFFIX_OP, UNARY_MATH_OP],
+  "paren": [ARG_LIST, PARAM_LIST, PAREN, PAREN_CLOSE, TYPE_LIST],
+  "type": [DEFAULT_MEMORY, DEFAULT_TABLE, IMMUTABLE, STORAGE_TYPE, VALUE_TYPE, VOID],
+  "ws": [WS]
 };
 
 for (let [category, ASTypes] of Object.entries(categories)) {
