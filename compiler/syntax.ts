@@ -25,83 +25,109 @@
       and allows the process of defining (most of) the syntax to follow a logical sequence, so it seems like a good overall strategy.
 */
 
+import { ASTNode } from './parser'
 
-export const ADD = {};
-export const ADDRESS = {};
-export const ADDRESS_CLOSE = {};
-export const ALLOCATE_PAGES = {};
-export const AND = {};
-export const ARG_LIST = {};
-export const AS = {};
-export const ASSIGN = {};
-export const BAD_TOKEN = {};
-export const BITWISE_AND = {};
-export const BITWISE_OR = {};
-export const BITWISE_SHIFT = {};
-export const BITWISE_XOR = {};
-export const BLOCK = {};
-export const BLOCK_CLOSE = {};
-export const BREAK = {};
-export const CALL = {};
-export const COMMA = {};
-export const COMMENT = {};
-export const CONTINUE = {};
-export const DECLARATION = {};
-export const DEFAULT_MEMORY = {};
-export const DEFAULT_TABLE = {};
-export const DEFINITION = {};
-export const ELSE = {};
-export const END_OF_INPUT = {};
-export const EQ_COMPARISON = {};
-export const EXPORT = {};
-export const EXPORT_TYPE = {};
-export const F32_LITERAL = {};
-export const F64_LITERAL = {};
-export const FN = {};
-export const FN_PTR = {};
-export const FN_SIGNATURE = {};
-export const FROM = {};
-export const I32_LITERAL = {};
-export const I64_LITERAL = {};
-export const IF = {};
-export const IMMUTABLE = {};
-export const IMPORT = {};
-export const INIT_EXPR = {};
-export const LOOP = {};
-export const MEMORY_ACCESS = {};
-export const MISC_INFIX = {};
-export const NEG = {};
-export const OR = {};
-export const ORDER_COMPARISON = {};
-export const PAGES_ALLOCATED = {};
-export const PARAM_LIST = {};
-export const PAREN = {};
-export const PAREN_CLOSE = {};
-export const PASS = {};
-export const PTR = {};
-export const RETURN = {};
-export const ROOT = {};
-export const SCALE_OP = {};
-export const SEMICOLON = {};
-export const STRING = {};
-export const STORAGE_TYPE = {};
-export const SUB = {};
-export const SUFFIX_OP = {};
-export const TYPE_LIST = {};
-export const UNARY_MATH_OP = {};
-export const VALUE_TYPE = {};
-export const VARIABLE = {};
-export const VOID = {};
-export const WS = {};
-export const YIELD = {};
+export class ASType {
+  ASType: ASType
+
+  skip = false              // Boolean; should the parser ignore this sort of token entirely (true for WS and COMMENT, false otherwise)?
+
+  leftOperands = 0          // How many operands should the parser expect to the left of this type of node? Either 0 or 1.
+  rightOperands = 0         // How many operands should the parser expect to the right of this type of node?
+  expectedChildCount = 0    // What's the (maximum) number of children to count before marking this node as finished?
+  //    This is Infinity for open expressions, and equal to .leftOperands plus .rightOperands otherwise.
+  CTC: CTCFn = () => null          // Child Type Constraint function - see the CTC section below.
+  PTC: PTCFn = () => false         // Parent Type Constraint function - see the PTC section below.
+
+  requiresTerminator: ASType | null = null // For open expressions, this is the ASType of tokens that close the expression (e.g. PAREN_CLOSE for PAREN).
+  ignoresTerminator: ASType | null = null  // For open expressions, this is an ASType that should be considered a "separator" (e.g. COMMA for ARG_LIST).
+  isTerminator = false      // Boolean; does this token type terminate the current expression (unless exempted by .ignoresTerminator)?
+
+  precedence = -Infinity    // The precedence to use for operator parsing conflicts. Higher wins.
+  rightAssociative = false  // This sets the associativity rule for operators with equal precedence - see the precedence tiers docs below.
+
+  createsNewScope = false   // Boolean; does this node mark the beginning of a new scope (in which all its children will be placed)?
+  createsName = false       // Boolean; does this node create a new named entity (e.g. variable definitions and such)?
+  isReference = false        // Boolean; does this node reference a named entity (and thus require name resolution)?
+
+}
+
+export const ADD = new ASType();
+export const ADDRESS = new ASType();
+export const ADDRESS_CLOSE = new ASType();
+export const ALLOCATE_PAGES = new ASType();
+export const AND = new ASType();
+export const ARG_LIST = new ASType();
+export const AS = new ASType();
+export const ASSIGN = new ASType();
+export const BAD_TOKEN = new ASType();
+export const BITWISE_AND = new ASType();
+export const BITWISE_OR = new ASType();
+export const BITWISE_SHIFT = new ASType();
+export const BITWISE_XOR = new ASType();
+export const BLOCK = new ASType();
+export const BLOCK_CLOSE = new ASType();
+export const BREAK = new ASType();
+export const CALL = new ASType();
+export const COMMA = new ASType();
+export const COMMENT = new ASType();
+export const CONTINUE = new ASType();
+export const DECLARATION = new ASType();
+export const DEFAULT_MEMORY = new ASType();
+export const DEFAULT_TABLE = new ASType();
+export const DEFINITION = new ASType();
+export const ELSE = new ASType();
+export const END_OF_INPUT = new ASType();
+export const EQ_COMPARISON = new ASType();
+export const EXPORT = new ASType();
+export const EXPORT_TYPE = new ASType();
+export const F32_LITERAL = new ASType();
+export const F64_LITERAL = new ASType();
+export const FN = new ASType();
+export const FN_PTR = new ASType();
+export const FN_SIGNATURE = new ASType();
+export const FROM = new ASType();
+export const I32_LITERAL = new ASType();
+export const I64_LITERAL = new ASType();
+export const IF = new ASType();
+export const IMMUTABLE = new ASType();
+export const IMPORT = new ASType();
+export const INIT_EXPR = new ASType();
+export const LOOP = new ASType();
+export const MEMORY_ACCESS = new ASType();
+export const MISC_INFIX = new ASType();
+export const NEG = new ASType();
+export const OR = new ASType();
+export const ORDER_COMPARISON = new ASType();
+export const PAGES_ALLOCATED = new ASType();
+export const PARAM_LIST = new ASType();
+export const PAREN = new ASType();
+export const PAREN_CLOSE = new ASType();
+export const PASS = new ASType();
+export const PTR = new ASType();
+export const RETURN = new ASType();
+export const ROOT = new ASType();
+export const SCALE_OP = new ASType();
+export const SEMICOLON = new ASType();
+export const STRING = new ASType();
+export const STORAGE_TYPE = new ASType();
+export const SUB = new ASType();
+export const SUFFIX_OP = new ASType();
+export const TYPE_LIST = new ASType();
+export const UNARY_MATH_OP = new ASType();
+export const VALUE_TYPE = new ASType();
+export const VARIABLE = new ASType();
+export const VOID = new ASType();
+export const WS = new ASType();
+export const YIELD = new ASType();
 
 // A couple of utility functions
 
-function operands (leftOperands, rightOperands) {
-  return {leftOperands, rightOperands, expectedChildCount: leftOperands + rightOperands};
+function operands(leftOperands: number, rightOperands: number) {
+  return { leftOperands, rightOperands, expectedChildCount: leftOperands + rightOperands };
 }
 
-function recordProperties (...syntaxRules) {
+function recordProperties(...syntaxRules: [Partial<ASType>, ASType[]][]) {
   for (let [values, types] of syntaxRules) {
     for (let type of types) {
       Object.assign(type, values);
@@ -114,32 +140,13 @@ function recordProperties (...syntaxRules) {
   Record default property values for all ASTypes.
 */
 
-recordProperties([
-  {
-    skip: false,              // Boolean; should the parser ignore this sort of token entirely (true for WS and COMMENT, false otherwise)?
+// recordProperties([
+//   {
+//   },
 
-    leftOperands: 0,          // How many operands should the parser expect to the left of this type of node? Either 0 or 1.
-    rightOperands: 0,         // How many operands should the parser expect to the right of this type of node?
-    expectedChildCount: 0,    // What's the (maximum) number of children to count before marking this node as finished?
-                              //    This is Infinity for open expressions, and equal to .leftOperands plus .rightOperands otherwise.
-    CTC: () => null,          // Child Type Constraint function - see the CTC section below.
-    PTC: () => false,         // Parent Type Constraint function - see the PTC section below.
-    
-    requiresTerminator: null, // For open expressions, this is the ASType of tokens that close the expression (e.g. PAREN_CLOSE for PAREN).
-    ignoresTerminator: null,  // For open expressions, this is an ASType that should be considered a "separator" (e.g. COMMA for ARG_LIST).
-    isTerminator: false,      // Boolean; does this token type terminate the current expression (unless exempted by .ignoresTerminator)?
-
-    precedence: -Infinity,    // The precedence to use for operator parsing conflicts. Higher wins.
-    rightAssociative: false,  // This sets the associativity rule for operators with equal precedence - see the precedence tiers docs below.
-
-    createsNewScope: false,   // Boolean; does this node mark the beginning of a new scope (in which all its children will be placed)?
-    createsName: false,       // Boolean; does this node create a new named entity (e.g. variable definitions and such)?
-    isReference: false        // Boolean; does this node reference a named entity (and thus require name resolution)?
-  },
-
-  // The following array is automatically populated by a script.
-  [ /* ALL_ASTYPES */ ADD, ADDRESS, ADDRESS_CLOSE, ALLOCATE_PAGES, AND, ARG_LIST, AS, ASSIGN, BAD_TOKEN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, BLOCK, BLOCK_CLOSE, BREAK, CALL, COMMA, COMMENT, CONTINUE, DECLARATION, DEFAULT_MEMORY, DEFAULT_TABLE, DEFINITION, ELSE, END_OF_INPUT, EQ_COMPARISON, EXPORT, EXPORT_TYPE, F32_LITERAL, F64_LITERAL, FN, FN_PTR, FN_SIGNATURE, FROM, I32_LITERAL, I64_LITERAL, IF, IMMUTABLE, IMPORT, INIT_EXPR, LOOP, MEMORY_ACCESS, MISC_INFIX, NEG, OR, ORDER_COMPARISON, PAGES_ALLOCATED, PARAM_LIST, PAREN, PAREN_CLOSE, PASS, PTR, RETURN, ROOT, SCALE_OP, SEMICOLON, STRING, STORAGE_TYPE, SUB, SUFFIX_OP, TYPE_LIST, UNARY_MATH_OP, VALUE_TYPE, VARIABLE, VOID, WS, YIELD /* END_ALL_ASTYPES */ ],
-]);
+//   // The following array is automatically populated by a script.
+//   [ /* ALL_ASTYPES */ ADD, ADDRESS, ADDRESS_CLOSE, ALLOCATE_PAGES, AND, ARG_LIST, AS, ASSIGN, BAD_TOKEN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, BLOCK, BLOCK_CLOSE, BREAK, CALL, COMMA, COMMENT, CONTINUE, DECLARATION, DEFAULT_MEMORY, DEFAULT_TABLE, DEFINITION, ELSE, END_OF_INPUT, EQ_COMPARISON, EXPORT, EXPORT_TYPE, F32_LITERAL, F64_LITERAL, FN, FN_PTR, FN_SIGNATURE, FROM, I32_LITERAL, I64_LITERAL, IF, IMMUTABLE, IMPORT, INIT_EXPR, LOOP, MEMORY_ACCESS, MISC_INFIX, NEG, OR, ORDER_COMPARISON, PAGES_ALLOCATED, PARAM_LIST, PAREN, PAREN_CLOSE, PASS, PTR, RETURN, ROOT, SCALE_OP, SEMICOLON, STRING, STORAGE_TYPE, SUB, SUFFIX_OP, TYPE_LIST, UNARY_MATH_OP, VALUE_TYPE, VARIABLE, VOID, WS, YIELD /* END_ALL_ASTYPES */ ],
+// ]);
 
 
 /*
@@ -149,51 +156,51 @@ recordProperties([
 recordProperties(
 
   // Prefix Operators
-  
+
   [operands(0, 1),
-    [ALLOCATE_PAGES, CALL, EXPORT, IMMUTABLE, LOOP, MEMORY_ACCESS, NEG, UNARY_MATH_OP, PTR, RETURN, YIELD]],
+  [ALLOCATE_PAGES, CALL, EXPORT, IMMUTABLE, LOOP, MEMORY_ACCESS, NEG, UNARY_MATH_OP, PTR, RETURN, YIELD]],
   [operands(0, 2),
-    [DEFAULT_MEMORY, DEFAULT_TABLE, FN_PTR, FN_SIGNATURE, IF]],
+  [DEFAULT_MEMORY, DEFAULT_TABLE, FN_PTR, FN_SIGNATURE, IF]],
   [operands(0, 3),
-    [FN, IMPORT]],
+  [FN, IMPORT]],
   [operands(1, 0),
-    [SUFFIX_OP]],
-  
+  [SUFFIX_OP]],
+
   // Infix Operators
 
   [operands(1, 1),
-    [DEFINITION, DECLARATION, SCALE_OP, ADD, AS, MISC_INFIX, SUB, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, ORDER_COMPARISON, EQ_COMPARISON, AND, OR, ASSIGN, ELSE, INIT_EXPR]],
+  [DEFINITION, DECLARATION, SCALE_OP, ADD, AS, MISC_INFIX, SUB, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, ORDER_COMPARISON, EQ_COMPARISON, AND, OR, ASSIGN, ELSE, INIT_EXPR]],
 
   // Open Expressions (various paren types, blocks, etc.) and their terminators
-  [{expectedChildCount: Infinity},
-    [ADDRESS, ARG_LIST, BLOCK, PARAM_LIST, PAREN, ROOT, TYPE_LIST]],
-  [{ignoresTerminator: COMMA},
-    [ARG_LIST, PARAM_LIST, TYPE_LIST]],
-  [{ignoresTerminator: SEMICOLON},
-    [ADDRESS, BLOCK, PAREN, ROOT]],
-  [{requiresTerminator: ADDRESS_CLOSE},
-    [ADDRESS]],
-  [{requiresTerminator: BLOCK_CLOSE},
-    [BLOCK]],
-  [{requiresTerminator: END_OF_INPUT},
-    [ROOT]],
-  [{requiresTerminator: PAREN_CLOSE},
-    [ARG_LIST, PARAM_LIST, PAREN, TYPE_LIST]],
-  [{isTerminator: true},
-    [BLOCK_CLOSE, COMMA, END_OF_INPUT, ADDRESS_CLOSE, PAREN_CLOSE, SEMICOLON]],
+  [{ expectedChildCount: Infinity },
+  [ADDRESS, ARG_LIST, BLOCK, PARAM_LIST, PAREN, ROOT, TYPE_LIST]],
+  [{ ignoresTerminator: COMMA },
+  [ARG_LIST, PARAM_LIST, TYPE_LIST]],
+  [{ ignoresTerminator: SEMICOLON },
+  [ADDRESS, BLOCK, PAREN, ROOT]],
+  [{ requiresTerminator: ADDRESS_CLOSE },
+  [ADDRESS]],
+  [{ requiresTerminator: BLOCK_CLOSE },
+  [BLOCK]],
+  [{ requiresTerminator: END_OF_INPUT },
+  [ROOT]],
+  [{ requiresTerminator: PAREN_CLOSE },
+  [ARG_LIST, PARAM_LIST, PAREN, TYPE_LIST]],
+  [{ isTerminator: true },
+  [BLOCK_CLOSE, COMMA, END_OF_INPUT, ADDRESS_CLOSE, PAREN_CLOSE, SEMICOLON]],
 
   // Other Properties
 
-  [{createsName: true},
-    [DECLARATION, DEFINITION]],
-  [{createsNewScope: true},
-    [BLOCK, FN, LOOP, ROOT]],
-  [{isReference: true},
-    [CALL, MEMORY_ACCESS, VARIABLE]],
-  [{rightAssociative: true},
-    [ASSIGN, ELSE, INIT_EXPR]],
-  [{skip: true},
-    [COMMENT, WS]]
+  [{ createsName: true },
+  [DECLARATION, DEFINITION]],
+  [{ createsNewScope: true },
+  [BLOCK, FN, LOOP, ROOT]],
+  [{ isReference: true },
+  [CALL, MEMORY_ACCESS, VARIABLE]],
+  [{ rightAssociative: true },
+  [ASSIGN, ELSE, INIT_EXPR]],
+  [{ skip: true },
+  [COMMENT, WS]]
 );
 
 
@@ -212,7 +219,7 @@ recordProperties(
     We don't check that with CTC rules - the CTC for IF doesn't know anything about the runTypes involved.
     That sort of constraint is enforced during the validation stage, after the AST has already been constructed.
     See /compiler/validation.js for more about runTypes and semantic validation.
-    
+
   In general, CTC rules return an object of some sort if a violation is detected, and null otherwise.
 */
 
@@ -229,36 +236,47 @@ recordProperties(
   If an operator has 3 operand positions and you give CTCByPos 2 arguments, it will check the first two operand positions against those
     constraints and assume the third can be anything.
 */
-function CTCByPos (...positions) {
+
+
+export interface CTCFn {
+  (node: ASTNode): CTC | null
+}
+
+export interface CTC {
+  position?: number
+  child?: ASTNode
+}
+
+function CTCByPos(...positions: ASType[][]): CTCFn {
   return (node) => {
     for (let i = 0; i < positions.length; i++) {
       if (!positions[i].includes(node.children[i].ASType)) {
-        return {position: i, child: node.children[i]};
+        return { position: i, child: node.children[i] };
       }
     }
     return null;
   };
 }
 
-ASSIGN.CTC          = CTCByPos([DEFINITION, VARIABLE, MEMORY_ACCESS]);  // The right operand of ASSIGN isn't constrained.
-AS.CTC              = CTCByPos([EXPORT_TYPE, VARIABLE], [STRING]);
-DECLARATION.CTC     = CTCByPos([VARIABLE], [FN_PTR, FN_SIGNATURE, IMMUTABLE, PTR, VALUE_TYPE]);
-DEFAULT_MEMORY.CTC  = CTCByPos([I32_LITERAL], [I32_LITERAL, VOID]);
-DEFAULT_TABLE.CTC   = CTCByPos([I32_LITERAL], [I32_LITERAL, VOID]);
-DEFINITION.CTC      = CTCByPos([VARIABLE], [FN, FN_PTR, IMMUTABLE, PTR, VALUE_TYPE]);
-ELSE.CTC            = CTCByPos([IF], [BLOCK, BREAK, CONTINUE, IF, ELSE]);
-EXPORT.CTC          = CTCByPos([AS, VARIABLE]);
-FN.CTC              = CTCByPos([PARAM_LIST], [VALUE_TYPE, VOID], [BLOCK]);
-FN_PTR.CTC          = CTCByPos([TYPE_LIST], [VALUE_TYPE, VOID]);
-FN_SIGNATURE.CTC    = CTCByPos([TYPE_LIST], [VALUE_TYPE, VOID]);
-IF.CTC              = CTCByPos([PAREN], [BLOCK, BREAK, CONTINUE]);
-IMMUTABLE.CTC       = CTCByPos([FN_PTR, PTR, VALUE_TYPE]);
-IMPORT.CTC          = CTCByPos([DECLARATION, DEFAULT_MEMORY, DEFAULT_TABLE], [FROM], [STRING]);
-INIT_EXPR.CTC       = CTCByPos([DEFINITION], [F32_LITERAL, F64_LITERAL, I32_LITERAL, I64_LITERAL, VARIABLE]);
-LOOP.CTC            = CTCByPos([BLOCK, ELSE, IF]);
-NEG.CTC             = CTCByPos([F32_LITERAL, F64_LITERAL, I32_LITERAL, I64_LITERAL]);
-PTR.CTC             = CTCByPos([STORAGE_TYPE, VALUE_TYPE]);
-SUFFIX_OP.CTC       = CTCByPos([VARIABLE]);
+ASSIGN.CTC = CTCByPos([DEFINITION, VARIABLE, MEMORY_ACCESS]);  // The right operand of ASSIGN isn't constrained.
+AS.CTC = CTCByPos([EXPORT_TYPE, VARIABLE], [STRING]);
+DECLARATION.CTC = CTCByPos([VARIABLE], [FN_PTR, FN_SIGNATURE, IMMUTABLE, PTR, VALUE_TYPE]);
+DEFAULT_MEMORY.CTC = CTCByPos([I32_LITERAL], [I32_LITERAL, VOID]);
+DEFAULT_TABLE.CTC = CTCByPos([I32_LITERAL], [I32_LITERAL, VOID]);
+DEFINITION.CTC = CTCByPos([VARIABLE], [FN, FN_PTR, IMMUTABLE, PTR, VALUE_TYPE]);
+ELSE.CTC = CTCByPos([IF], [BLOCK, BREAK, CONTINUE, IF, ELSE]);
+EXPORT.CTC = CTCByPos([AS, VARIABLE]);
+FN.CTC = CTCByPos([PARAM_LIST], [VALUE_TYPE, VOID], [BLOCK]);
+FN_PTR.CTC = CTCByPos([TYPE_LIST], [VALUE_TYPE, VOID]);
+FN_SIGNATURE.CTC = CTCByPos([TYPE_LIST], [VALUE_TYPE, VOID]);
+IF.CTC = CTCByPos([PAREN], [BLOCK, BREAK, CONTINUE]);
+IMMUTABLE.CTC = CTCByPos([FN_PTR, PTR, VALUE_TYPE]);
+IMPORT.CTC = CTCByPos([DECLARATION, DEFAULT_MEMORY, DEFAULT_TABLE], [FROM], [STRING]);
+INIT_EXPR.CTC = CTCByPos([DEFINITION], [F32_LITERAL, F64_LITERAL, I32_LITERAL, I64_LITERAL, VARIABLE]);
+LOOP.CTC = CTCByPos([BLOCK, ELSE, IF]);
+NEG.CTC = CTCByPos([F32_LITERAL, F64_LITERAL, I32_LITERAL, I64_LITERAL]);
+PTR.CTC = CTCByPos([STORAGE_TYPE, VALUE_TYPE]);
+SUFFIX_OP.CTC = CTCByPos([VARIABLE]);
 
 /*
   NOTE: The following CALL and MEMORY_ACCESS rules technically hold, but they don't need to be explicitly enforced because the lexer and
@@ -274,23 +292,23 @@ SUFFIX_OP.CTC       = CTCByPos([VARIABLE]);
   They're open expressions so we don't distinguish different positions or care about how many children they have, we just make sure that the
     ASType of each child is among a finite list of ASTypes.
 */
-function CTCForAll (...acceptableTypes) {
+function CTCForAll(...acceptableTypes: ASType[]): CTCFn {
   return (node) => {
     for (let child of node.children) {
       if (!acceptableTypes.includes(child.ASType)) {
-        return {child};
+        return { child };
       }
     }
     return null;
   };
 }
 
-PARAM_LIST.CTC      = CTCForAll(DECLARATION);
-ROOT.CTC            = CTCForAll(DEFINITION, DEFAULT_MEMORY, DEFAULT_TABLE, EXPORT, IMPORT, INIT_EXPR);
-TYPE_LIST.CTC       = CTCForAll(VALUE_TYPE);
+PARAM_LIST.CTC = CTCForAll(DECLARATION);
+ROOT.CTC = CTCForAll(DEFINITION, DEFAULT_MEMORY, DEFAULT_TABLE, EXPORT, IMPORT, INIT_EXPR);
+TYPE_LIST.CTC = CTCForAll(VALUE_TYPE);
 
 // ADDRESS is a special case, as it has a variable (but bounded) number of children and an ASType constraint only on the second child.
-ADDRESS.CTC         = ({children}) => (children.length === 1 || (children.length === 2 && children[1].ASType === I32_LITERAL)) ? null : {};
+ADDRESS.CTC = ({ children }) => (children.length === 1 || (children.length === 2 && children[1].ASType === I32_LITERAL)) ? null : {};
 
 /*
   Parent Type Constaints (PTC)
@@ -321,8 +339,13 @@ ADDRESS.CTC         = ({children}) => (children.length === 1 || (children.length
 
   This returns true if a rule violation is found and false otherwise.
 */
-function PTCByPos (...positions) {
-  return ({parent}) => {
+
+export interface PTCFn {
+  (node: ASTNode): boolean
+}
+
+function PTCByPos(...positions: [ASType, number | null][]): PTCFn {
+  return ({ parent }) => {
     for (var [parentType, pos] of positions) {
       // We use parent.children.length as a shorthand for the future position of the node in its parent's children array.
       // This works b/c children check their parent type constraints just before being placed, so the child being checked isn't in the
@@ -335,30 +358,30 @@ function PTCByPos (...positions) {
   };
 }
 
-ADDRESS.PTC         = PTCByPos([MEMORY_ACCESS, 0]);
-AS.PTC              = PTCByPos([EXPORT, 0]);
-BREAK.PTC           = PTCByPos([BLOCK, null], [IF, 1], [ELSE, 1]);
-CONTINUE.PTC        = PTCByPos([BLOCK, null], [IF, 1], [ELSE, 1]);
-DEFAULT_MEMORY.PTC  = PTCByPos([ROOT, null], [IMPORT, 0]);
-DEFAULT_TABLE.PTC   = PTCByPos([ROOT, null], [IMPORT, 0]);
-EXPORT.PTC          = PTCByPos([ROOT, null]);
-FN.PTC              = PTCByPos([DEFINITION, 1]);
-FN_PTR.PTC          = PTCByPos([DEFINITION, 1], [DECLARATION, 1]);
-FROM.PTC            = PTCByPos([IMPORT, 1]);
-IMMUTABLE.PTC       = PTCByPos([DEFINITION, 1]);
-IMPORT.PTC          = PTCByPos([ROOT, null]);
-PTR.PTC             = PTCByPos([DECLARATION, 1], [DEFINITION, 1], [IMMUTABLE, 0]);
-RETURN.PTC          = PTCByPos([BLOCK, null]);
-STRING.PTC          = PTCByPos([IMPORT, 2], [AS, 1]);
-STORAGE_TYPE.PTC    = PTCByPos([PTR, 0]);
-VALUE_TYPE.PTC      = PTCByPos([DECLARATION, 1], [DEFINITION, 1], [FN, 1], [FN_PTR, 1], [FN_SIGNATURE, 1], [IMMUTABLE, 0], [PTR, 0], [TYPE_LIST, null],);
-VOID.PTC            = PTCByPos([FN, 1], [FN_PTR, 1], [FN_SIGNATURE, 1], [DEFAULT_MEMORY, 1], [DEFAULT_TABLE, 1]);
-YIELD.PTC           = PTCByPos([BLOCK, null]);
+ADDRESS.PTC = PTCByPos([MEMORY_ACCESS, 0]);
+AS.PTC = PTCByPos([EXPORT, 0]);
+BREAK.PTC = PTCByPos([BLOCK, null], [IF, 1], [ELSE, 1]);
+CONTINUE.PTC = PTCByPos([BLOCK, null], [IF, 1], [ELSE, 1]);
+DEFAULT_MEMORY.PTC = PTCByPos([ROOT, null], [IMPORT, 0]);
+DEFAULT_TABLE.PTC = PTCByPos([ROOT, null], [IMPORT, 0]);
+EXPORT.PTC = PTCByPos([ROOT, null]);
+FN.PTC = PTCByPos([DEFINITION, 1]);
+FN_PTR.PTC = PTCByPos([DEFINITION, 1], [DECLARATION, 1]);
+FROM.PTC = PTCByPos([IMPORT, 1]);
+IMMUTABLE.PTC = PTCByPos([DEFINITION, 1]);
+IMPORT.PTC = PTCByPos([ROOT, null]);
+PTR.PTC = PTCByPos([DECLARATION, 1], [DEFINITION, 1], [IMMUTABLE, 0]);
+RETURN.PTC = PTCByPos([BLOCK, null]);
+STRING.PTC = PTCByPos([IMPORT, 2], [AS, 1]);
+STORAGE_TYPE.PTC = PTCByPos([PTR, 0]);
+VALUE_TYPE.PTC = PTCByPos([DECLARATION, 1], [DEFINITION, 1], [FN, 1], [FN_PTR, 1], [FN_SIGNATURE, 1], [IMMUTABLE, 0], [PTR, 0], [TYPE_LIST, null],);
+VOID.PTC = PTCByPos([FN, 1], [FN_PTR, 1], [FN_SIGNATURE, 1], [DEFAULT_MEMORY, 1], [DEFAULT_TABLE, 1]);
+YIELD.PTC = PTCByPos([BLOCK, null]);
 
 /*
   NOTE: The following are more rules that hold but aren't necessary to explicitly enforce,
     because they're either impossible to violate in practice or will necessarily be caught by another rule.
-  
+
   E.g. INIT_EXPR only appears when getASType (see below) overrides an ASSIGN because the parent has type ROOT,
     so we don't need to enforce the implicit constraint that the parent node must have type ROOT.
 
@@ -394,14 +417,14 @@ YIELD.PTC           = PTCByPos([BLOCK, null]);
     the right operator wins.
   But this seems like an ambiguous parse, so this sort of thing should be avoided by putting right-associative operators in their own tiers.
 
-  See the parse() and shouldReparent() functions in /compiler/parser.js for details on how that algorithm works.  
+  See the parse() and shouldReparent() functions in /compiler/parser.js for details on how that algorithm works.
 
   Some additional constraints determine the order of this tier list:
     DEFINITION and DECLARATION need to go before IMPORT.
     AS needs to go before EXPORT.
     IF needs to go before ELSE, which needs to go before LOOP.
     Keyword prefix operators that take operands that are dynamically computed expressions should generally go after the math operators.
-  
+
   Most of the rest of the order reflects the familiar operator precedence hierarchy inherited from languages like C.
 
   Maintainability note:
@@ -449,18 +472,18 @@ YIELD.PTC           = PTCByPos([BLOCK, null]);
 
   The following is an important feature of the syntax of WebBS:
     All of the information required to decide the ASType of a node to generate can be determined lexically, by the preceding tokens.
-  
+
   In fact, if we had a modal lexer that was smart enough to use context to distinguish between ambiguous tokens, then it could always
     determine what ASType to associate with a token before it even reached the parser.
   This would complicate the lexer code a lot, and it turns out that our simple non-modal lexer can make fairly accurate guesses about the
     ASType that will eventually end up being assigned to the nodes created from the tokens it emits.
   We usually trust the lexer's guess, but sometimes we let parent nodes reinterpret the ASTypes of their children as they're being created.
   The new ASType is then used when parsing and validating the node and its children.
-  
+
   This applies to prefix operator parents only.
   Since infix operators can adopt a given node and become its parent after the node has already been parsed, adding an infix operator
     that reinterprets the type of its children in a way that affect parsing would require some broader changes to the parser.
-  
+
   There are a couple special cases where a prefix operator reinterprets a potential child node, which is then adopted by an infix operator,
       e.g. export default_table as "foo".
     Normally DEFAULT_TABLE would expect some operands on the right, but we're using it as a name here.
@@ -474,13 +497,13 @@ YIELD.PTC           = PTCByPos([BLOCK, null]);
     So basic syntax highlighting shouldn't depend on reinterpretation, because the editor won't ever see the new ASType.
     This is another potential issue that could be solved with a modal lexer.
 */
-export function getASType (ASType, parentType) {
+export function getASType(ASType: ASType, parentType: ASType) {
   if (ASType === PAREN) {
     // Parentheses are used for various types of things with different syntactical and semantic constraints, so we disambiguate those.
     if (parentType === FN) {
       // As part of a function definition, a parenthetical is a list of named parameter definitions.
       return PARAM_LIST;
-    
+
     } else if (parentType === CALL) {
       // Following a function call, a parenthetical is a list of function arguments.
       return ARG_LIST;
@@ -495,13 +518,13 @@ export function getASType (ASType, parentType) {
     if (ASType === DEFINITION) {
       return DECLARATION;
     }
-  
+
   } else if (parentType === DECLARATION) {
     // Inside an declaration FN becomes FN_SIGNATURE, which means we don't expect a body.
     if (ASType === FN) {
       return FN_SIGNATURE;
     }
-  
+
   } else if (parentType === EXPORT) {
     // Explained in the large comment above - DEFAULT_MEMORY and DEFAULT_TABLE are used as names in the context of an export.
     if (ASType === DEFAULT_MEMORY || ASType === DEFAULT_TABLE) {

@@ -6,15 +6,17 @@
   Those are mostly determined by the structure of the WebAssembly bytecode module format, whereas the function body code generation is
     determined by the structure and features of the WebBS language.
 */
-import { /* ALL_ASTYPES */ ADD, ADDRESS, ADDRESS_CLOSE, ALLOCATE_PAGES, AND, ARG_LIST, AS, ASSIGN, BAD_TOKEN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, BLOCK, BLOCK_CLOSE, BREAK, CALL, COMMA, COMMENT, CONTINUE, DECLARATION, DEFAULT_MEMORY, DEFAULT_TABLE, DEFINITION, ELSE, END_OF_INPUT, EQ_COMPARISON, EXPORT, EXPORT_TYPE, F32_LITERAL, F64_LITERAL, FN, FN_PTR, FN_SIGNATURE, FROM, I32_LITERAL, I64_LITERAL, IF, IMMUTABLE, IMPORT, INIT_EXPR, LOOP, MEMORY_ACCESS, MISC_INFIX, NEG, OR, ORDER_COMPARISON, PAGES_ALLOCATED, PARAM_LIST, PAREN, PAREN_CLOSE, PASS, PTR, RETURN, ROOT, SCALE_OP, SEMICOLON, STRING, STORAGE_TYPE, SUB, SUFFIX_OP, TYPE_LIST, UNARY_MATH_OP, VALUE_TYPE, VARIABLE, VOID, WS, YIELD /* END_ALL_ASTYPES */ } from "/WebBS/compiler/syntax.js";
+import { ByteCodeContainer } from './byteCode.js';
+import { ASTNode } from './parser.js';
+import { /* ALL_ASTYPES */ ADD, ADDRESS, ADDRESS_CLOSE, ALLOCATE_PAGES, AND, ARG_LIST, AS, ASSIGN, BAD_TOKEN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, BLOCK, BLOCK_CLOSE, BREAK, CALL, COMMA, COMMENT, CONTINUE, DECLARATION, DEFAULT_MEMORY, DEFAULT_TABLE, DEFINITION, ELSE, END_OF_INPUT, EQ_COMPARISON, EXPORT, EXPORT_TYPE, F32_LITERAL, F64_LITERAL, FN, FN_PTR, FN_SIGNATURE, FROM, I32_LITERAL, I64_LITERAL, IF, IMMUTABLE, IMPORT, INIT_EXPR, LOOP, MEMORY_ACCESS, MISC_INFIX, NEG, OR, ORDER_COMPARISON, PAGES_ALLOCATED, PARAM_LIST, PAREN, PAREN_CLOSE, PASS, PTR, RETURN, ROOT, SCALE_OP, SEMICOLON, STRING, STORAGE_TYPE, SUB, SUFFIX_OP, TYPE_LIST, UNARY_MATH_OP, VALUE_TYPE, VARIABLE, VOID, WS, YIELD /* END_ALL_ASTYPES */ } from "./syntax.js";
 
 
 /*
   This takes a ByteCodeContainer and a WebBS AST node, emits executable bytecode and returns the ByteCodeContainer.
 */
-export function generate (bytecode, node, depth) {
-  let {ASType, children, parent, runType, dropValue} = node; // Extract commonly used AST node properties for convenience.
-  
+export function generate(bytecode: ByteCodeContainer, node: ASTNode, depth: number) {
+  let { ASType, children, parent, runType, dropValue } = node; // Extract commonly used AST node properties for convenience.
+
   switch (ASType) {
 
     case ADD:
@@ -55,28 +57,28 @@ export function generate (bytecode, node, depth) {
       }
       bytecode
         .op("if").byte(runType, "block_type")
-          .op(`${runType}.const`).literal(runType, 0, "value")
+        .op(`${runType}.const`).literal(runType, 0, "value")
         .op("else")
-          .generate(right, depth + 1)
+        .generate(right, depth + 1)
         .op("end");
     } break;
 
 
     case ASSIGN: {
       let [left, right] = children;
-      
+
       if (left.ASType !== MEMORY_ACCESS) {
         bytecode
           .generate(right, depth)
           .setVariable(left.meta.index, left.meta.isGlobal, !dropValue);
 
       } else {  // left.ASType === MEMORY_ACCESS
-        let {index, isGlobal, storageSize, returnType, extendedType, storageBits} = left.meta;
+        let { index, isGlobal, storageSize, returnType, extendedType, storageBits } = left.meta;
         let [address, offsetProvided] = left.children[0].children;
         let offset = offsetProvided === undefined ? 0 : offsetProvided.meta.value;
 
-        for (var alignment = Math.log2(storageSize); offset % (2**alignment) !== 0; alignment--); // Calculate the alignment.
-        
+        for (var alignment = Math.log2(storageSize); offset % (2 ** alignment) !== 0; alignment--); // Calculate the alignment.
+
         bytecode
           .generate(address, depth)
           .getVariable(index, isGlobal)
@@ -111,7 +113,7 @@ export function generate (bytecode, node, depth) {
       } else {
         bytecode
           .op("block").byte(runType, "block_type")
-            .generateEach(children, depth + 1)
+          .generateEach(children, depth + 1)
           .op("end");
       }
     } break;
@@ -137,7 +139,7 @@ export function generate (bytecode, node, depth) {
       }
     } break;
 
-    
+
     case CONTINUE: {
       // Subtracting 1 from the jumpTarget depth hits the inner loop instead of the outer block, so the loop iterates rather than breaks.
       bytecode.op("br").varuint(depth - node.meta.jumpTarget.meta.depth - 1, "relative_depth");
@@ -150,9 +152,9 @@ export function generate (bytecode, node, depth) {
       bytecode.getVariable(node.meta.index, node.meta.isGlobal);
     } break;
 
-    
+
     case ELSE: {
-      let [{children: [condition, passBody]}, failBody] = children;
+      let [{ children: [condition, passBody] }, failBody] = children;
 
       bytecode.generate(condition, depth);  // During validation, we established that this returns some kind of numeric type...
       if (condition.runType !== "i32") {  // If it's not an i32 (required by "if"), we implicitly cast it to one by comparing it to 0.
@@ -162,9 +164,9 @@ export function generate (bytecode, node, depth) {
       }
       bytecode
         .op("if").byte(runType, "block_type")
-          .generate(passBody, depth + 1)
+        .generate(passBody, depth + 1)
         .op("else")
-          .generate(failBody, depth + 1)
+        .generate(failBody, depth + 1)
         .op("end");
     } break;
 
@@ -189,7 +191,7 @@ export function generate (bytecode, node, depth) {
       }
       bytecode
         .op("if").byte("void", "block_type")  // All bare IFs have runType void.
-          .generate(body, depth + 1)
+        .generate(body, depth + 1)
         .op("end");
     } break;
 
@@ -200,21 +202,21 @@ export function generate (bytecode, node, depth) {
       node.meta.depth = depth + 1;  // This is the container depth.
       bytecode
         .op("block").byte(node.runType, "block_type")
-          .op("loop").byte(node.runType, "block_type")
-            .generate(children[0], depth + 2)
-            .op("br").varuint(0, "relative_depth")  // Branch to loop depth to continue if we get here.
-          .op("end")
+        .op("loop").byte(node.runType, "block_type")
+        .generate(children[0], depth + 2)
+        .op("br").varuint(0, "relative_depth")  // Branch to loop depth to continue if we get here.
+        .op("end")
         .op("end");
     } break;
 
 
     case MEMORY_ACCESS: {
-      let {index, isGlobal, storageSize, runType, extendedType, storageSigned, storageBits} = node.meta;
+      let { index, isGlobal, storageSize, runType, extendedType, storageSigned, storageBits } = node.meta;
       let [address, offsetProvided] = children[0].children;
       let offset = offsetProvided === undefined ? 0 : offsetProvided.meta.value;
-      
-      for (var alignment = Math.log2(storageSize); offset % (2**alignment) !== 0; alignment--); // Calculate the alignment.
-      
+
+      for (var alignment = Math.log2(storageSize); offset % (2 ** alignment) !== 0; alignment--); // Calculate the alignment.
+
       let loadOp = `${runType}.load`;
       if (extendedType) {
         loadOp += `${storageBits}_${storageSigned}`;
@@ -245,9 +247,9 @@ export function generate (bytecode, node, depth) {
         .generate(left, depth)
         .op("tee_local").varuint(node.meta.tempVariable.index, "local_index")
         .op("if").byte(runType, "block_type")
-          .op("get_local").varuint(node.meta.tempVariable.index, "local_index")
+        .op("get_local").varuint(node.meta.tempVariable.index, "local_index")
         .op("else")
-          .generate(right, depth + 1)
+        .generate(right, depth + 1)
         .op("end");
     } break;
 
@@ -256,7 +258,7 @@ export function generate (bytecode, node, depth) {
       bytecode.op("current_memory").varuint(0, "reserved");
     } break;
 
-    
+
     case PASS: {
       bytecode.op("nop");
     } break;
@@ -269,7 +271,7 @@ export function generate (bytecode, node, depth) {
       bytecode.op("return");
       dropValue = false;  // Don't generate an unreachable drop instruction, no matter what the validation stage says.
     } break;
-    
+
 
     case SUFFIX_OP: {
       let child = children[0];
@@ -285,7 +287,7 @@ export function generate (bytecode, node, depth) {
         .op(`${child.runType}.const`).literal(child.runType, 1, "value")
         .op(`${child.runType}.${node.token.text === "++" ? "add" : "sub"}`)
         .setVariable(index, isGlobal, false);
-    
+
       dropValue = false;
     } break;
 

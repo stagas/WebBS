@@ -6,8 +6,8 @@
 
   A note about runTypes:
 
-  The syntactic validation performed by the first stage of parsing (implemented in /compiler/parser.js with rules defined in
-    /compiler/syntax.js) mostly depends on ASTypes (the syntactical types of nodes in the parse tree, e.g. FN, ASSIGN, etc.).
+  The syntactic validation performed by the first stage of parsing (implemented in /parser.js with rules defined in
+    /syntax.js) mostly depends on ASTypes (the syntactical types of nodes in the parse tree, e.g. FN, ASSIGN, etc.).
   The semantic validation done here also depends on runtime types (or runTypes, as they're referred to in the code below).
 
   Runtime types are baked in to WebAssembly. The semantics for WebAssembly depend on a kind of typed stack that instructions may push/pop
@@ -29,9 +29,12 @@
     produced in the case where execution continues forward normally (not the stack value produced on a branch out of a block/function).
 */
 
-import { /* ALL_ASTYPES */ ADD, ADDRESS, ADDRESS_CLOSE, ALLOCATE_PAGES, AND, ARG_LIST, AS, ASSIGN, BAD_TOKEN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, BLOCK, BLOCK_CLOSE, BREAK, CALL, COMMA, COMMENT, CONTINUE, DECLARATION, DEFAULT_MEMORY, DEFAULT_TABLE, DEFINITION, ELSE, END_OF_INPUT, EQ_COMPARISON, EXPORT, EXPORT_TYPE, F32_LITERAL, F64_LITERAL, FN, FN_PTR, FN_SIGNATURE, FROM, I32_LITERAL, I64_LITERAL, IF, IMMUTABLE, IMPORT, INIT_EXPR, LOOP, MEMORY_ACCESS, MISC_INFIX, NEG, OR, ORDER_COMPARISON, PAGES_ALLOCATED, PARAM_LIST, PAREN, PAREN_CLOSE, PASS, PTR, RETURN, ROOT, SCALE_OP, SEMICOLON, STRING, STORAGE_TYPE, SUB, SUFFIX_OP, TYPE_LIST, UNARY_MATH_OP, VALUE_TYPE, VARIABLE, VOID, WS, YIELD /* END_ALL_ASTYPES */ } from "/WebBS/compiler/syntax.js";
-import {CompileError} from "/WebBS/compiler/compileError.js";
-import {operatorTable} from "/WebBS/compiler/operatorTable.js";
+import { /* ALL_ASTYPES */ ADD, ADDRESS, ADDRESS_CLOSE, ALLOCATE_PAGES, AND, ARG_LIST, AS, ASSIGN, BAD_TOKEN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, BLOCK, BLOCK_CLOSE, BREAK, CALL, COMMA, COMMENT, CONTINUE, DECLARATION, DEFAULT_MEMORY, DEFAULT_TABLE, DEFINITION, ELSE, END_OF_INPUT, EQ_COMPARISON, EXPORT, EXPORT_TYPE, F32_LITERAL, F64_LITERAL, FN, FN_PTR, FN_SIGNATURE, FROM, I32_LITERAL, I64_LITERAL, IF, IMMUTABLE, IMPORT, INIT_EXPR, LOOP, MEMORY_ACCESS, MISC_INFIX, NEG, OR, ORDER_COMPARISON, PAGES_ALLOCATED, PARAM_LIST, PAREN, PAREN_CLOSE, PASS, PTR, RETURN, ROOT, SCALE_OP, SEMICOLON, STRING, STORAGE_TYPE, SUB, SUFFIX_OP, TYPE_LIST, UNARY_MATH_OP, VALUE_TYPE, VARIABLE, VOID, WS, YIELD, /* END_ALL_ASTYPES */
+  ASType
+} from "./syntax.js";
+import { CompileError } from "./compileError.js";
+import { operatorTable } from "./operatorTable.js";
+import { ASTNode, Def, RunType } from './parser.js';
 
 /*
   This function implements the semantic validation stage.
@@ -47,11 +50,14 @@ import {operatorTable} from "/WebBS/compiler/operatorTable.js";
 
   It returns the runType of the node (treated as an expression), for convenience.
 */
-export function validate (node, valueRequired) {
-  let {ASType, token, children, scope, parent, runType} = node;
+export function validate(node: ASTNode, valueRequired: boolean) {
+  let { ASType, token, children, scope, parent, runType } = node;
+
+  let leftType: RunType | undefined
+  let rightType: RunType | undefined
 
   switch (ASType) {
-    
+
     case ADD:
     case SUB:
     case SCALE_OP:
@@ -63,22 +69,22 @@ export function validate (node, valueRequired) {
     case EQ_COMPARISON:
     case ORDER_COMPARISON: {
       let [left, right] = children;
-      let leftType = validate(left, true);
-      let rightType = validate(right, true);
+      leftType = validate(left, true);
+      rightType = validate(right, true);
       let opInfo = operatorTable[token.text][`${leftType},${rightType}`];
 
       if (left.alwaysEscapes) {
-        throw new CompileError("Unreachable Code", {node: left, unreachable: node});
+        throw new CompileError("Unreachable Code", { node: left, unreachable: node });
       } else if (right.alwaysEscapes) {
-        throw new CompileError("Unreachable Code", {node: right, unreachable: node});
+        throw new CompileError("Unreachable Code", { node: right, unreachable: node });
       } else if (opInfo === undefined) {
-        throw new CompileError("Undefined Operator", {node});
+        throw new CompileError("Undefined Operator", { node });
       }
-    
+
       node.meta = opInfo;
       runType = opInfo.returnType;
     } break;
-    
+
 
     case ALLOCATE_PAGES:
     case UNARY_MATH_OP: {
@@ -86,26 +92,26 @@ export function validate (node, valueRequired) {
       let opInfo = operatorTable[token.text][validate(child, true)];
 
       if (child.alwaysEscapes) {
-        throw new CompileError("Unreachable Code", {node: child, unreachable: node});
+        throw new CompileError("Unreachable Code", { node: child, unreachable: node });
       } else if (opInfo === undefined) {
-        throw new CompileError("Undefined Operator", {node});
+        throw new CompileError("Undefined Operator", { node });
       }
-    
+
       node.meta = opInfo;
       runType = opInfo.returnType;
     } break;
 
-    
+
     case AND: {
       let [left, right] = children;
       runType = validate(left, true);
 
       if (left.alwaysEscapes) {
-        throw new CompileError("Unreachable Code", {node: left, unreachable: node});
+        throw new CompileError("Unreachable Code", { node: left, unreachable: node });
       } else if (validate(right, true) !== runType) {
-        throw new CompileError("Inconsistent Type For Boolean", {node, leftType: runType, rightType: right.runType});
+        throw new CompileError("Inconsistent Type For Boolean", { node, leftType: runType, rightType: right.runType });
       } else if (runType === "void") {
-        throw new CompileError("Non-Numeric Type For Boolean", {node, runType});
+        throw new CompileError("Non-Numeric Type For Boolean", { node, runType });
       }
     } break;
 
@@ -118,24 +124,24 @@ export function validate (node, valueRequired) {
         validate(left, valueRequired);
         leftType = left.meta.returnType;  // We need .returnType instead of .runType here, because left is a pointer.
         if (valueRequired) {
-          // Efficiently teeing the value from a memory store requires an anonymous variable - see /compiler/functionCodeGen.js.
-          node.meta = {tempVariable: anonymousLocalVariable(node, leftType)};
+          // Efficiently teeing the value from a memory store requires an anonymous variable - see /functionCodeGen.js.
+          node.meta = new Def({ tempVariable: anonymousLocalVariable(node, leftType) });
         }
       } else if (left.ASType !== DEFINITION && !left.meta.mutable) {
         // Initial assignment to an immutable is OK, so DEFINITION passes the check above, but we bounce other references out.
-        throw new CompileError("Assignment To Immutable", {node});
+        throw new CompileError("Assignment To Immutable", { node });
       }
 
       validate(right, true);
       if (right.alwaysEscapes) {
-        throw new CompileError("Unreachable Code", {node: right, unreachable: node});
+        throw new CompileError("Unreachable Code", { node: right, unreachable: node });
       } if (right.runType !== leftType) {
-        throw new CompileError("Assignment Type Mismatch", {left: left.ASType === DEFINITION ? left.children[0] : left, right, runType: leftType});
+        throw new CompileError("Assignment Type Mismatch", { left: left.ASType === DEFINITION ? left.children[0] : left, right, runType: leftType });
       }
-      
+
       runType = leftType;
     } break;
-    
+
 
     case BLOCK:
     case PAREN: {
@@ -145,7 +151,7 @@ export function validate (node, valueRequired) {
           let child = children[i];
           validate(child, false);
           if (child.alwaysEscapes) {
-            throw new CompileError("Unreachable Code", {child, unreachable: children[i + 1]});
+            throw new CompileError("Unreachable Code", { child, unreachable: children[i + 1] });
           } else if (child.runType !== "void") {
             child.dropValue = true;
           }
@@ -168,18 +174,18 @@ export function validate (node, valueRequired) {
     case YIELD: {
       let loop = findAncestorOfType(node, LOOP);
       if (loop === null) { // Make sure we're inside of a loop.
-        throw new CompileError("Misplaced Break/Yield/Continue", {node});
+        throw new CompileError("Misplaced Break/Yield/Continue", { node });
       }
-      
+
       loop.meta.yieldPoints.push(node);
-      node.meta = {jumpTarget: loop}; // Technically, we jump to a block containing the loop, but code generation will take care of that.
+      node.meta = new Def({ jumpTarget: loop }); // Technically, we jump to a block containing the loop, but code generation will take care of that.
       node.alwaysEscapes = true;
-      
+
       if (children.length === 1) {  // YIELD will have a child, BREAK won't.
         let child = children[0];
         runType = validate(child, true);
         if (child.alwaysEscapes) {
-          throw new CompileError("Unreachable Code", {node: child, unreachable: node});
+          throw new CompileError("Unreachable Code", { node: child, unreachable: node });
         }
       }
     } break;
@@ -190,7 +196,7 @@ export function validate (node, valueRequired) {
       let args = children[0].children;
 
       if (args.length !== fn.paramTypes.length) {
-        throw new CompileError("Wrong Number of Arguments", {node, args});
+        throw new CompileError("Wrong Number of Arguments", { node, args });
       }
 
       // Here we validate argument runTypes against the function signature.
@@ -200,36 +206,36 @@ export function validate (node, valueRequired) {
         validate(arg, true);
         if (arg.alwaysEscapes) {
           // On the off chance one of the arguments is a block expression that always returns, we need to catch it.
-          throw new CompileError("Unreachable Code", {node: arg, unreachable: node});
+          throw new CompileError("Unreachable Code", { node: arg, unreachable: node });
         } else if (arg.runType !== paramType) {
-          throw new CompileError("Function Signature Mismatch", {node, arg, expectedType: paramType});
-        }        
+          throw new CompileError("Function Signature Mismatch", { node, arg, expectedType: paramType });
+        }
       }
 
       runType = fn.returnType;
     } break;
-    
-    
+
+
     case CONTINUE: {
       let loop = findAncestorOfType(node, LOOP);
       if (loop === null) { // Make sure we're inside of a loop.
-        throw new CompileError("Misplaced Break/Yield/Continue", {node});
+        throw new CompileError("Misplaced Break/Yield/Continue", { node });
       }
-      node.meta = {jumpTarget: loop};
+      node.meta = new Def({ jumpTarget: loop });
       node.alwaysEscapes = true;
     } break;
 
 
     case DEFAULT_MEMORY:
     case DEFAULT_TABLE: {
-      let {initialSize, maxSize} = node.meta;
+      let { initialSize, maxSize } = node.meta;
 
       validate(initialSize, true);
-      
+
       if (maxSize.ASType !== VOID) {
         validate(maxSize, true);
         if (maxSize.meta.value < initialSize.meta.value) {
-          throw new CompileError("Unintelligible Size", {initialSize, maxSize});
+          throw new CompileError("Unintelligible Size", { initialSize, maxSize });
         }
       }
     } break;
@@ -243,14 +249,14 @@ export function validate (node, valueRequired) {
 
 
     case ELSE: {
-      let [{children: [condition, ifBody]}, elseBody] = children;
-      
+      let [{ children: [condition, ifBody] }, elseBody] = children;
+
       validate(condition, true);
       if (condition.alwaysEscapes) {
-        throw new CompileError("Unreachable Code", {node: condition, unreachable: node});
+        throw new CompileError("Unreachable Code", { node: condition, unreachable: node });
       } else if (condition.runType === "void") {
         // We can coerce any numeric runType into something that works as a condition for the "if", but otherwise we're in trouble.
-        throw new CompileError("Bad Condition", {node: condition});
+        throw new CompileError("Bad Condition", { node: condition });
       }
 
       runType = validate(ifBody, valueRequired);
@@ -267,7 +273,7 @@ export function validate (node, valueRequired) {
           runType = elseType;
         }
       } else if (runType !== elseType) {
-        throw new CompileError("Inconsistent Type", {ifNode: children[0], elseNode: node, ifType: runType, elseType});
+        throw new CompileError("Inconsistent Type", { ifNode: children[0], elseNode: node, ifType: runType, elseType });
       }
     } break;
 
@@ -277,7 +283,7 @@ export function validate (node, valueRequired) {
       // This is done during validation because we had to wait for name resolution to be complete before doing it.
       let child = children[0];
       let name;
-      let definition;
+      let definition: Def;
 
       if (child.ASType === AS) {  // If we're re-naming the export with AS, we need to descend into that to get the reference/name.
         name = child.children[1].token.text.slice(1, -1); // Remove quotes around the name.
@@ -285,7 +291,7 @@ export function validate (node, valueRequired) {
         if (child.ASType === EXPORT_TYPE) {
           definition = child.token.text === "default_table" ? scope.defaultTable[0] : scope.defaultMemory[0];
           if (definition === null) {
-            throw new CompileError("Non-Existent Export", {node: child});
+            throw new CompileError("Non-Existent Export", { node: child });
           }
         } else {
           definition = child.meta;
@@ -294,9 +300,9 @@ export function validate (node, valueRequired) {
         name = child.token.text;
         definition = child.meta;
       }
-      
+
       if (definition.mutable) {
-        throw new CompileError("Mutable Export", {node}); // Exporting mutable globals is not allowed in the WebAssembly MVP.
+        throw new CompileError("Mutable Export", { node }); // Exporting mutable globals is not allowed in the WebAssembly MVP.
       }
 
       definition.exportName = name;
@@ -308,28 +314,28 @@ export function validate (node, valueRequired) {
       runType = "f32";
       // TODO: What happens if we get an "x32" and we try to encode a number that can only be represented as a 64 bit float?
       //  The encoder uses DataView.setFloat32 under the covers - investigate how that works.
-      node.meta = {value: parseFloat(token.text.replace("x32", "")), runType};
+      node.meta = new Def({ value: parseFloat(token.text.replace("x32", "")), runType });
     } break;
 
 
     case F64_LITERAL: {
       runType = "f64";
-      node.meta = {value: parseFloat(token.text.slice(0, -3)), runType};
+      node.meta = new Def({ value: parseFloat(token.text.slice(0, -3)), runType });
     } break;
 
 
     case FN: {
       // The only thing we need to check here is whether the body actually returns something of the declared return type.
-      let returnType = validate(node.meta.body, node.meta.returnType !== "void");
-      if (returnType !== node.meta.returnType && !node.meta.body.alwaysEscapes) {
-        throw new CompileError("Implicit Return Type Mismatch", {node});
+      let returnType = validate(node.meta.body!, node.meta.returnType !== "void");
+      if (returnType !== node.meta.returnType && !node.meta.body!.alwaysEscapes) {
+        throw new CompileError("Implicit Return Type Mismatch", { node });
       }
     } break;
 
 
     case FN_PTR: {
       if (scope.defaultTable.length !== 1) {
-        throw new CompileError("No Table Defined For Function Pointer", {node});
+        throw new CompileError("No Table Defined For Function Pointer", { node });
       }
     } break;
 
@@ -337,36 +343,36 @@ export function validate (node, valueRequired) {
     case I32_LITERAL: {
       // Extract the actual value of the literal here, and throw an error if it's outside of the 32-bit range.
       let value = parseInt(token.text.replace("x32", ""), 10);  // Remove any unnecessary "x32" suffixes.
-      
+
       // The literals here always yield a positive value.
       // But in-place they may be negated (i.e. if the parent node is a negative symbol),
       //  in which case, we use the lower bound for a signed 32-bit integer
       // Otherwise, we just check if they're below the unsigned 32-bit limite.
       let negative = parent.ASType === NEG;
       if (value > (negative ? 2147483648 : 4294967295)) {
-        throw new CompileError("Integer Literal Out of Range", {node, bits: 32});
+        throw new CompileError("Integer Literal Out of Range", { node, bits: 32 });
       }
 
       runType = "i32";
-      node.meta = {value, runType};
+      node.meta = new Def({ value, runType });
     } break;
 
 
     case I64_LITERAL: {
       let value = parseInt(token.text.slice(0, -3), 10);  // Remove the "x64" suffix.
       let negative = parent.ASType === NEG;
-       
+
       // Javascript represents all numbers using 64-bit floats.
       // Long story short, this means that only integers that can fit in the 53 bit coefficient of a 64-bit float can be safely represented.
       // We could get around this limitation by writing our own numeric literal parser/encoder, or allowing other representations...
       //  ...but we don't.
 
       if (!Number.isSafeInteger(negative ? -value : value)) {
-        throw new CompileError("Integer Literal Out of Range", {node, bits: 64});
+        throw new CompileError("Integer Literal Out of Range", { node, bits: 64 });
       }
 
       runType = "i64";
-      node.meta = {value, runType};
+      node.meta = new Def({ value, runType });
     } break;
 
 
@@ -377,10 +383,10 @@ export function validate (node, valueRequired) {
 
       validate(condition, true);
       if (condition.alwaysEscapes) {
-        throw new CompileError("Unreachable Code", {node: condition, unreachable: node});
+        throw new CompileError("Unreachable Code", { node: condition, unreachable: node });
       } else if (condition.runType === "void") {
         // We can coerce any numeric runType into something that works as a condition for the "if", but otherwise we're in trouble.
-        throw new CompileError("Bad Condition", {node: condition});
+        throw new CompileError("Bad Condition", { node: condition });
       }
 
       validate(body, false);  // The body will take care of dropping values from the stack.
@@ -391,7 +397,7 @@ export function validate (node, valueRequired) {
       let [spec, ignoreFrom, importSource] = children;
       let sources = importSourceSplitter.exec(importSource.token.text);
       if (sources === null) {
-        throw new CompileError("Bad Import Source", {node: importSource});
+        throw new CompileError("Bad Import Source", { node: importSource });
       }
       sources.shift(); // Remove the first item - we're interested in the two sub-matches.
       spec.meta.importSource = sources;
@@ -408,25 +414,25 @@ export function validate (node, valueRequired) {
       left.meta.initializer = right;
 
       if (validate(right, true) !== left.meta.runType) {
-        throw new CompileError("Assignment Type Mismatch", {left, right, runType: left.meta.runType});
+        throw new CompileError("Assignment Type Mismatch", { left, right, runType: left.meta.runType });
       } else if (right.ASType === VARIABLE && (right.meta.imported || right.meta.mutable)) {
         // Initializers for global variables can only refer to literals or imported immutable globals.
-        throw new CompileError("Bad Initializer", {node: right});
+        throw new CompileError("Bad Initializer", { node: right });
       }
     } break;
 
-    
+
     case LOOP: {
-      let yieldPoints = [];
-      let returnPoints = [];
-      node.meta = {yieldPoints, returnPoints, depth: 0};
+      let yieldPoints: ASTNode[] = [];
+      let returnPoints: ASTNode[] = [];
+      node.meta = new Def({ yieldPoints, returnPoints, depth: 0 });
 
       validate(children[0], false); // valueRequired is false here, because loops only return a value through explicit yields.
 
       if (yieldPoints.length === 0) {
         // This loop doesn't yield (or break), so if it doesn't return either, it has no exit condtion.
         if (returnPoints.length === 0) {
-          throw new CompileError("Infinite Loop", {node});
+          throw new CompileError("Infinite Loop", { node });
         }
         // If we get here, there's a theoretical exit condition (in the form of a return), so the loop always returns from the function
         //  (unless it continues forever).
@@ -438,7 +444,7 @@ export function validate (node, valueRequired) {
         runType = yieldPoints[0].runType;
         for (let i = 1; i < yieldPoints.length; i++) {
           if (yieldPoints[i].runType !== runType) {
-            throw new CompileError("Inconsistent Type For Loop", {first: yieldPoints[0], second: yieldPoints[i]});
+            throw new CompileError("Inconsistent Type For Loop", { first: yieldPoints[0], second: yieldPoints[i] });
           }
         }
       }
@@ -451,9 +457,9 @@ export function validate (node, valueRequired) {
 
       validate(address, true);
       if (address.alwaysEscapes) {
-        throw new CompileError("Unreachable Code", {node: address, unreachable: node});
+        throw new CompileError("Unreachable Code", { node: address, unreachable: node });
       } else if (address.runType !== "i32") {
-        throw new CompileError("32-bit Address Required", {node: address});
+        throw new CompileError("32-bit Address Required", { node: address });
       }
 
       if (offsetProvided !== undefined) {
@@ -472,15 +478,15 @@ export function validate (node, valueRequired) {
       runType = validate(left, true);
 
       if (left.alwaysEscapes) {
-        throw new CompileError("Unreachable Code", {node: left, unreachable: node});
+        throw new CompileError("Unreachable Code", { node: left, unreachable: node });
       } if (validate(right, true) !== runType) {
-        throw new CompileError("Inconsistent Type For Boolean", {node, leftType, rightType});
+        throw new CompileError("Inconsistent Type For Boolean", { node, leftType, rightType });
       } else if (runType === "void") {
-        throw new CompileError("Non-Numeric Type For Boolean", {node, runType});
+        throw new CompileError("Non-Numeric Type For Boolean", { node, runType });
       }
 
       // Code generation requires that we add an anonymous local variable here.
-      node.meta = {tempVariable: anonymousLocalVariable(node, runType)};
+      node.meta = new Def({ tempVariable: anonymousLocalVariable(node, runType) });
     } break;
 
 
@@ -491,7 +497,7 @@ export function validate (node, valueRequired) {
 
     case PTR: {
       if (scope.defaultMemory.length !== 1) {
-        throw new CompileError("No Memory Defined For Pointer", {node});
+        throw new CompileError("No Memory Defined For Pointer", { node });
       }
     } break;
 
@@ -501,10 +507,10 @@ export function validate (node, valueRequired) {
         let child = children[0];
         runType = validate(child, true);
         if (child.alwaysEscapes) {
-          throw new CompileError("Unreachable Code", {node: child, unreachable: node});
+          throw new CompileError("Unreachable Code", { node: child, unreachable: node });
         }
       }
-      
+
       // Ascend to the containing function, and note any loops escaped along the way.
       for (var ancestor = node.parent; ancestor.ASType !== FN; ancestor = ancestor.parent) {
         if (ancestor.ASType === LOOP) {
@@ -513,12 +519,12 @@ export function validate (node, valueRequired) {
       }
 
       if (ancestor.meta.returnType !== runType) {
-        throw new CompileError("Explicit Return Type Mismatch", {node, definition: ancestor.meta, runType});
+        throw new CompileError("Explicit Return Type Mismatch", { node, definition: ancestor.meta, runType });
       }
 
       node.alwaysEscapes = true;
     } break;
-    
+
 
     case ROOT: {
       for (let child of children) {
@@ -537,7 +543,7 @@ export function validate (node, valueRequired) {
     } break;
 
   } // End of huge switch statement
-  
+
   node.runType = runType;
   return runType;
 }
@@ -554,12 +560,12 @@ const importSourceSplitter = /^"((?:[^"\\/]|\\.)*)\/((?:[^"\\/]|\\.)*)"$/;  // T
 /*
   This adds an anonymous local variable to a function scope, for when temporary storage is required during code generation.
 */
-function anonymousLocalVariable (node, runType) {
+function anonymousLocalVariable(node: ASTNode, runType: RunType) {
   let fnScope = findAncestorOfType(node, FN).scope;
   let name = `tmp-${runType}`;  // "-" is not an allowed character in WebBS variable names, so this isn't a regular local variable.
-  let definition = fnScope.names[name];  
+  let definition = fnScope.names[name];
   if (definition === undefined) {
-    definition = fnScope.names[name] = {
+    definition = fnScope.names[name] = new Def({
       ASType: VARIABLE,
       exportName: null,
       isGlobal: false,
@@ -572,7 +578,7 @@ function anonymousLocalVariable (node, runType) {
       runType,
       scope: fnScope,
       token: node.token // Welp, hopefully we don't need to reference this variable by token.
-    };
+    });
 
     // We need to add this to the function's list of local variables, so it gets included during code generation.
     fnScope.variables.push(definition);
@@ -585,12 +591,12 @@ function anonymousLocalVariable (node, runType) {
 /*
   This walks up the AST starting with a given node, looking for an ancestor with a given ASType.
 */
-function findAncestorOfType (initialNode, ASType) {
+function findAncestorOfType(initialNode: ASTNode, ASType: ASType) {
   for (let node = initialNode.parent; node !== null; node = node.parent) {
     if (node.ASType === ASType) {
       return node;
     }
   }
 
-  return null;
+  throw new CompileError("Invalid Node Ancestor Lookup", { node: initialNode })
 }

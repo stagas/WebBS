@@ -1,4 +1,5 @@
-import {ByteCodeContainer} from "/WebBS/compiler/byteCode.js";
+import { ByteCodeContainer } from "./byteCode.js";
+import { ASTNode, Scope } from './parser.js';
 
 
 /*
@@ -6,11 +7,11 @@ import {ByteCodeContainer} from "/WebBS/compiler/byteCode.js";
   It takes the root node of a WebBS AST (as returned by the parse function).
   It returns a ByteCodeContainer with the (annotated) source of a WebAssembly module.
   In order to compile that into an actual WebAssembly module, you'll need to call .toByteArray() on the result (see /compiler/byteCode.js).
-  
+
   Code generation should basically never intentially throw a CompileError;
     the only defined exception is thrown if you do something silly like define more local variables than can fit in the 32-bit index space.
 */
-export function generateModule (root) {
+export function generateModule(root: ASTNode) {
   let module =
     new ByteCodeContainer("module")
       .WASMModuleHeader();
@@ -35,7 +36,7 @@ export function generateModule (root) {
 /*
   The type section is a list of function signature types that functions (including imported functions) reference in their definitions.
 */
-function generateTypeSection (source, module) {
+function generateTypeSection(source: Scope, module: ByteCodeContainer) {
   let section = module.section("type section");
   let count = source.functionSignatures.length;
 
@@ -45,7 +46,7 @@ function generateTypeSection (source, module) {
       .reserveSize("payload_len")
       .varuint(count, "count");
 
-    
+
     for (let [index, [returnType, ...paramTypes]] of source.functionSignatures.entries()) {
       let signature =
         section.section(`type ${index}`)
@@ -67,7 +68,7 @@ function generateTypeSection (source, module) {
       signature.finishSection();
     }
   }
-  
+
   section.finishSection();
 }
 
@@ -79,7 +80,7 @@ function generateTypeSection (source, module) {
     E.g. if you import two functions, they'll occupy the 0 and 1 positions of the function index space,
       and the first function defined inside the module will be at position 2.
 */
-function generateImportSection (source, module) {
+function generateImportSection(source: Scope, module: ByteCodeContainer) {
   let section = module.section("import section");
   let count = source.imports.function.length + source.imports.global.length;
   let table = source.defaultTable[0];
@@ -100,37 +101,37 @@ function generateImportSection (source, module) {
     for (let definition of source.imports.function) {
       section
         .section(`fn ${definition.index} (${definition.name})`)
-          .importDefinition(definition)
-          .varuint(definition.signatureIndex, "index")
-          .finishSection();
+        .importDefinition(definition)
+        .varuint(definition.signatureIndex, "index")
+        .finishSection();
     }
-  
+
     for (let definition of source.imports.global) {
       section
         .section(`global ${definition.index} (${definition.name})`)
-          .importDefinition(definition)
-          .byte(definition.runType, "content_type")
-          .byte("global.immutable", "mutability") // In the WebAssembly MVP, all imported globals must be immutable.
-          .finishSection();
+        .importDefinition(definition)
+        .byte(definition.runType, "content_type")
+        .byte("global.immutable", "mutability") // In the WebAssembly MVP, all imported globals must be immutable.
+        .finishSection();
     }
-  
+
     if (table !== undefined && table.importSource !== null) {
       section
         .section("default_table")
-          .importDefinition(table)
-          .byte("anyfunc", "element_type")  // In the WebAssembly MVP, "anyfunc" is the only defined element type for a table.
-          .resizableLimits(table)
-          .finishSection();
+        .importDefinition(table)
+        .byte("anyfunc", "element_type")  // In the WebAssembly MVP, "anyfunc" is the only defined element type for a table.
+        .resizableLimits(table)
+        .finishSection();
     }
-  
+
     if (memory !== undefined && memory.importSource !== null) {
       section
         .section("default_memory")
-          .importDefinition(memory)
-          .resizableLimits(memory)
-          .finishSection();
+        .importDefinition(memory)
+        .resizableLimits(memory)
+        .finishSection();
     }
-  }  
+  }
 
   section.finishSection();
 }
@@ -140,7 +141,7 @@ function generateImportSection (source, module) {
   The function section just contains a list that maps non-imported functions to function signatures (via indices into the type section).
     It does not contain any executable code - see the code section below for that.
 */
-function generateFunctionSection (source, module) {
+function generateFunctionSection(source: Scope, module: ByteCodeContainer) {
   let section = module.section("function section");
   let count = source.functions.length;
 
@@ -162,7 +163,7 @@ function generateFunctionSection (source, module) {
 /*
   The table section defines a non-imported default table, if necessary.
 */
-function generateTableSection (source, module) {
+function generateTableSection(source: Scope, module: ByteCodeContainer) {
   let section = module.section("table section");
   let table = source.defaultTable[0];
 
@@ -182,7 +183,7 @@ function generateTableSection (source, module) {
 /*
   The memory section defines a non-imported default memory store, if necessary.
 */
-function generateMemorySection (source, module) {
+function generateMemorySection(source: Scope, module: ByteCodeContainer) {
   let section = module.section("memory section");
   let memory = source.defaultMemory[0];
 
@@ -201,7 +202,7 @@ function generateMemorySection (source, module) {
 /*
   The global section is a list of all non-imported global variables, along with basic expressions used to initialize them.
 */
-function generateGlobalSection (source, module) {
+function generateGlobalSection(source: Scope, module: ByteCodeContainer) {
   let section = module.section("global section");
   let count = source.variables.length;
 
@@ -211,18 +212,21 @@ function generateGlobalSection (source, module) {
       .reserveSize("payload_len")
       .varuint(count, "count");
 
-    for (let {name, runType, mutable, initializer} of source.variables) {
+    for (let { name, runType, mutable, initializer } of source.variables) {
       section
         .section(`${name}`)
-          .byte(runType, "content_type")
-          .byte(mutable ? "global.mutable" : "global.immutable", "mutability")
-          .section("init_expr")
-            .generate(initializer, 0)
-            .op("end")
-            .finishSection()
-          .finishSection();
+
+        .byte(runType, "content_type")
+        .byte(mutable ? "global.mutable" : "global.immutable", "mutability")
+
+        .section("init_expr")
+        .generate(initializer!, 0)
+        .op("end")
+        .finishSection()!
+
+        .finishSection();
     }
-  } 
+  }
 
   section.finishSection();
 }
@@ -232,26 +236,26 @@ function generateGlobalSection (source, module) {
   The export section is a list of exported functions, globals, tables and memory stores.
   Each export assigned a name and then specified via an external kind and an reference into the respective index space.
 */
-function generateExportSection (source, module) {
+function generateExportSection(source, module) {
   let section = module.section("export section");
   let count = source.exports.length;
-  
+
   if (count > 0) {
     section
       .byte("section.export", "id")
       .reserveSize("payload_len")
       .varuint(count, "count");
 
-    for (let {exportName, kind, index} of source.exports) {
+    for (let { exportName, kind, index } of source.exports) {
       section
         .section(`${exportName}`)
-          .string(exportName, "field")
-          .byte(`external_kind.${kind}`, "kind",)
-          .varuint(index, "index")
-          .finishSection();
+        .string(exportName, "field")
+        .byte(`external_kind.${kind}`, "kind",)
+        .varuint(index, "index")
+        .finishSection();
     }
   }
-  
+
   section.finishSection();
 }
 
@@ -260,7 +264,7 @@ function generateExportSection (source, module) {
   The start section (optionally) specifies a function to execute when the module is instantiated.
   We look for a function named "main" that takes no parameters and has no return value.
 */
-function generateStartSection (source, module) {
+function generateStartSection(source, module) {
   let section = module.section("start section");
   let startFn = source.names["main"];
 
@@ -279,7 +283,7 @@ function generateStartSection (source, module) {
   The code section contains the actual executable code for all the non-imported functions.
   Each function defintion is a list of local variable types, followed by the actual function body code.
 */
-function generateCodeSection (source, module) {
+function generateCodeSection(source, module) {
   let count = source.functions.length;
   let section = module.section("code section");
 
@@ -291,11 +295,11 @@ function generateCodeSection (source, module) {
 
     for (let definition of source.functions) {
       let locals = definition.scope.variables; // Includes function parameters.
-      let fnByteCode = 
+      let fnByteCode =
         section
           .section(`fn ${definition.index} (${definition.name})`)
-            .reserveSize("body_size")
-            .varuint(locals.length - definition.paramTypes.length, "local_count");
+          .reserveSize("body_size")
+          .varuint(locals.length - definition.paramTypes.length, "local_count");
 
       // Indices for local variables aren't actually recorded until this point.
       // The format for recording local variables (including function parameters) technically allows us to specify more than one variable at
@@ -313,9 +317,9 @@ function generateCodeSection (source, module) {
 
       fnByteCode
         .section("code")
-          .generate(definition.body, 0) // See /compiler/functionCodeGen.js for the function body code generation.
-          .op("end")
-          .finishSection()
+        .generate(definition.body, 0) // See /compiler/functionCodeGen.js for the function body code generation.
+        .op("end")
+        .finishSection()
         .finishSection();
     }
   }
@@ -327,7 +331,7 @@ function generateCodeSection (source, module) {
 /*
   Functions and global variables need to be assigned numbers within an index space, with imports preceding other definitions.
 */
-function orderGlobals ({imports: {function: fnImports, global: varImports}, variables, functions}) {
+function orderGlobals({ imports: { function: fnImports, global: varImports }, variables, functions }) {
   for (let i = 0; i < fnImports.length; i++) {
     fnImports[i].index = i;
   }
