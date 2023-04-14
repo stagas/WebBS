@@ -14,8 +14,10 @@ import { /* ALL_ASTYPES */ ADD, ADDRESS, ADDRESS_CLOSE, ALLOCATE_PAGES, AND, ARG
 /*
   This takes a ByteCodeContainer and a WebBS AST node, emits executable bytecode and returns the ByteCodeContainer.
 */
-export function generate(bytecode: ByteCodeContainer, node: ASTNode, depth: number) {
+export function generate(bytecodeParent: ByteCodeContainer, node: ASTNode, depth: number) {
   let { ASType, children, parent, runType, dropValue } = node; // Extract commonly used AST node properties for convenience.
+
+  let bytecode = bytecodeParent.section(node.token.text)
 
   switch (ASType) {
 
@@ -297,6 +299,8 @@ export function generate(bytecode: ByteCodeContainer, node: ASTNode, depth: numb
   if (dropValue) {
     bytecode.op("drop");
   }
+
+  bytecode.finishSection();
 
   return bytecode;
 }
