@@ -1,8 +1,17 @@
-import { AS, BAD_TOKEN, CALL, DECLARATION, DEFAULT_MEMORY, DEFAULT_TABLE, DEFINITION, ELEMENT, EXPORT, FN, FN_PTR, FN_SIGNATURE, IMMUTABLE, IMPORT, MEMORY_ACCESS, NEG, PTR, RETURN, ROOT, SUB, VARIABLE, getASType, ASType } from "./syntax.js";
+import { AS, BAD_TOKEN, CALL, DECLARATION, DEFAULT_MEMORY, DEFAULT_TABLE, DEFINITION, ELEMENT, EXPORT, FN, FN_PTR, FN_SIGNATURE, IMMUTABLE, IMPORT, MEMORY_ACCESS, NEG, PTR, RETURN, ROOT, SUB, VARIABLE, VALUE_TYPE, getASType, ASType } from "./syntax.js";
 import { validate } from "./validation.js";
 import { CompileError } from "./compileError.js";
 import { LexerToken as Token } from './lexer.js';
 import { Operator } from "./operatorTable.js";
+
+// The following lines are sometimes useful for debugging purposes.
+// Since the ASTypes are normal objects, it can be hard to tell which is which in a debugger.
+// Uncomment these lines to assign a label to each ASType in /compiler/syntax.js corresponding to its export name.
+
+import * as ASTypes from "./syntax.js";
+for (let [key, value] of Object.entries(ASTypes) as [string, ASType][]) {
+  value.kind = key
+}
 
 
 /*
@@ -238,7 +247,7 @@ function createScope(parent: Scope | null): Scope {
 
 const storageTypeSplitter = /(.(..))_?(.)?(..?)?/;  // This is a tiny utility regular expression used by define() below.
 
-export type RunType = 'void' | 'i32' | 'i64' | 'f32' | 'f64'
+export type RunType = 'void' | 'i32' | 'i64' | 'f32' | 'f64' | 'v128'
 export type DefKind = 'global' | 'function' | 'memory' | 'table' | 'element'
 
 type StorageType = 'i32'
@@ -271,6 +280,10 @@ export class Def {
   maxSize: ASTNode
   offsetIndex: ASTNode
   elements: ASTNode[]
+  simdValues: number[]
+  simdLane: number
+  simdLaneExtract: boolean
+  simdType: string // TODO
   scope: Scope //| null //,
   token: Token //
   body: ASTNode | null
@@ -532,11 +545,12 @@ function enforceReferenceSemantics(reference: ASTNode) {
   if (reference.parent.ASType === EXPORT || reference.parent.ASType === AS) return; // We can export any type.
 
   if (reference.ASType === VARIABLE && (refType === FN || refType === FN_SIGNATURE) && reference.parent.parent.ASType !== ELEMENT) {
-    console.log('YES', reference)
     throw new CompileError("Bad Reference: Not a Variable", { node: reference });
   } else if (reference.ASType === CALL && refType !== FN && refType !== FN_SIGNATURE && refType !== FN_PTR) {
     throw new CompileError("Bad Reference: Not a Function", { node: reference });
   } else if (reference.ASType === MEMORY_ACCESS && refType !== PTR) {
+    if (refType === VALUE_TYPE && reference.meta.runType === "v128") return
+    // console.log(reference, refType)
     throw new CompileError("Bad Reference: Not a Pointer", { node: reference });
   }
 }
@@ -556,15 +570,4 @@ function functionSignatureIndex(scope: Scope, paramTypes: RunType[], returnType:
     scope.functionSignatures.push(signature);
   }
   return index;
-}
-
-
-// The following lines are sometimes useful for debugging purposes.
-// Since the ASTypes are normal objects, it can be hard to tell which is which in a debugger.
-// Uncomment these lines to assign a label to each ASType in /compiler/syntax.js corresponding to its export name.
-
-import * as ASTypes from "./syntax.js";
-for (let [key, value] of Object.entries(ASTypes)) {
-  // @ts-ignore
-  value._name = key
 }

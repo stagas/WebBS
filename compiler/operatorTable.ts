@@ -37,6 +37,7 @@ export type Operator =
   | '+'
   | '-'
   | '*'
+  | '*f32x4'
   | '/'
   | '|/|'
   | '&'
@@ -156,6 +157,10 @@ export const operatorTable: OperatorTable = {
     "i64,i64": { returnType: "i64", operator: "i64.mul" },
     "f32,f32": { returnType: "f32", operator: "f32.mul" },
     "f64,f64": { returnType: "f64", operator: "f64.mul" }
+  },
+
+  "*f32x4": {
+    "v128,v128": { returnType: "v128", operator: "f32x4.mul" },
   },
 
   "/": {

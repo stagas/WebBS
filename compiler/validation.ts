@@ -32,7 +32,7 @@
 import { CompileError } from "./compileError.js";
 import { operatorTable } from "./operatorTable.js";
 import { ASTNode, Def, RunType } from "./parser.js";
-import { ADD, ALLOCATE_PAGES, AND, AS, ASSIGN, ASType, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, BLOCK, BREAK, CALL, CONTINUE, DEFAULT_MEMORY, DEFAULT_TABLE, DEFINITION, ELEMENT, ELSE, EQ_COMPARISON, EXPORT, EXPORT_TYPE, F32_LITERAL, F64_LITERAL, FN, FN_PTR, I32_LITERAL, I64_LITERAL, IF, IMPORT, INIT_EXPR, LOOP, MEMORY_ACCESS, MISC_INFIX, NEG, OR, ORDER_COMPARISON, PAGES_ALLOCATED, PAREN, PTR, RETURN, ROOT, SCALE_OP, SUB, SUFFIX_OP, UNARY_MATH_OP, VARIABLE, VOID, YIELD } from "./syntax.js";
+import { ADD, ALLOCATE_PAGES, AND, AS, ASSIGN, ASType, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, BLOCK, BREAK, CALL, CONTINUE, DEFAULT_MEMORY, DEFAULT_TABLE, DEFINITION, ELEMENT, ELSE, EQ_COMPARISON, EXPORT, EXPORT_TYPE, F32X4_LITERAL, F32_LITERAL, F64_LITERAL, FN, FN_PTR, I32_LITERAL, I64_LITERAL, IF, IMPORT, INIT_EXPR, LOOP, MEMORY_ACCESS, MISC_INFIX, NEG, OR, ORDER_COMPARISON, PAGES_ALLOCATED, PAREN, PTR, RETURN, ROOT, SCALE_OP, SIMD_SCALE_OP, SIMD_TYPE, SUB, SUFFIX_OP, UNARY_MATH_OP, VALUE_TYPE, VARIABLE, VOID, YIELD } from "./syntax.js";
 
 /*
   This function implements the semantic validation stage.
@@ -59,6 +59,7 @@ export function validate(node: ASTNode, valueRequired: boolean): RunType {
     case ADD:
     case SUB:
     case SCALE_OP:
+    case SIMD_SCALE_OP:
     case BITWISE_AND:
     case BITWISE_OR:
     case BITWISE_SHIFT:
@@ -330,6 +331,16 @@ export function validate(node: ASTNode, valueRequired: boolean): RunType {
     } break;
 
 
+    case SIMD_TYPE: {
+      runType = "v128";
+      node.meta = new Def({
+        simdValues: node.children[0].children.map((child) =>
+          parseFloat(child.token.text)
+        ), runType
+      });
+    } break;
+
+
     case F64_LITERAL: {
       runType = "f64";
       node.meta = new Def({ value: parseFloat(token.text.slice(0, -3)), runType });
@@ -424,7 +435,6 @@ export function validate(node: ASTNode, valueRequired: boolean): RunType {
     case INIT_EXPR: {
       let [left, right] = children;
       left.meta.initializer = right;
-
       if (validate(right, true) !== left.meta.runType) {
         throw new CompileError("Assignment Type Mismatch", { left, right, runType: left.meta.runType });
       } else if (right.ASType === VARIABLE && (right.meta.imported || right.meta.mutable)) {
@@ -464,18 +474,36 @@ export function validate(node: ASTNode, valueRequired: boolean): RunType {
 
 
     case MEMORY_ACCESS: {
-      let [address, offsetProvided] = children[0].children;
-      runType = node.meta.returnType;
+      // SIMD extract lane: var_v128[0; i32]
+      if (node.meta.ASType === VALUE_TYPE && node.meta.runType === "v128") {
+        let op = children[0]
+        let [lane, laneType] = op.children;
 
-      validate(address, true);
-      if (address.alwaysEscapes) {
-        throw new CompileError("Unreachable Code", { node: address, unreachable: node });
-      } else if (address.runType !== "i32") {
-        throw new CompileError("32-bit Address Required", { node: address });
+        validate(lane, true)
+        validate(laneType, true)
+
+        op.meta = new Def({
+          simdLaneExtract: true,
+          simdLane: parseInt(lane.token.text)
+        })
+
+        runType = op.meta.simdType = <RunType>laneType.token.text
       }
+      // Memory access: p[0] p[0; 2]
+      else {
+        let [address, offsetProvided] = children[0].children;
+        runType = node.meta.returnType;
 
-      if (offsetProvided !== undefined) {
-        validate(offsetProvided, true);  // Trigger integer literal parsing.
+        validate(address, true);
+        if (address.alwaysEscapes) {
+          throw new CompileError("Unreachable Code", { node: address, unreachable: node });
+        } else if (address.runType !== "i32") {
+          throw new CompileError("32-bit Address Required", { node: address });
+        }
+
+        if (offsetProvided !== undefined) {
+          validate(offsetProvided, true);  // Trigger integer literal parsing.
+        }
       }
     } break;
 

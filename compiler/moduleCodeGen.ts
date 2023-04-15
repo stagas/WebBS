@@ -252,18 +252,30 @@ function generateGlobalSection(source: Scope, module: ByteCodeContainer) {
       .varuint(count, "count");
 
     for (let { name, runType, mutable, initializer } of source.variables) {
-      section
+      let globalExpr = section
         .section(`${name}`)
 
         .byte(runType, "content_type")
         .byte(mutable ? "global.mutable" : "global.immutable", "mutability")
 
-        .section("init_expr")
-        .generate(initializer!, 0)
+      let initExpr = globalExpr.section("init_expr")
+
+      if (initializer) {
+        initExpr.generate(initializer, 0)
+      } else {
+        initExpr
+          .section(`0 (implicit)`)
+          .op(`${runType}.const`)
+          .literal(runType, 0, "value")
+          .finishSection()
+      }
+
+      initExpr
         .op("end")
         .finishSection()!
 
-        .finishSection();
+
+      globalExpr.finishSection();
     }
   }
 
@@ -303,7 +315,7 @@ function generateExportSection(source: Scope, module: ByteCodeContainer) {
   The start section (optionally) specifies a function to execute when the module is instantiated.
   We look for a function named "main" that takes no parameters and has no return value.
 */
-function generateStartSection(source, module) {
+function generateStartSection(source: Scope, module: ByteCodeContainer) {
   let section = module.section("start section");
   let startFn = source.names["main"];
 
@@ -322,7 +334,7 @@ function generateStartSection(source, module) {
   The code section contains the actual executable code for all the non-imported functions.
   Each function defintion is a list of local variable types, followed by the actual function body code.
 */
-function generateCodeSection(source, module) {
+function generateCodeSection(source: Scope, module: ByteCodeContainer) {
   let count = source.functions.length;
   let section = module.section("code section");
 
@@ -356,9 +368,9 @@ function generateCodeSection(source, module) {
 
       fnByteCode
         .section("code")
-        .generate(definition.body, 0) // See /compiler/functionCodeGen.js for the function body code generation.
+        .generate(definition.body!, 0) // See /compiler/functionCodeGen.js for the function body code generation.
         .op("end")
-        .finishSection()
+        .finishSection()!
         .finishSection();
     }
   }

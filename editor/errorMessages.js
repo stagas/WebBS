@@ -207,6 +207,7 @@ export function generateErrorMessage(error) {
       }
 
       default: {
+        console.error(error)
         return msg`Unknown Error: ${type}`
       }
     } // The huge switch statement ends here.
@@ -230,9 +231,10 @@ export function generateErrorMessage(error) {
       references: []
     };
   } else {
+    console.error(error)
     return {
-      type: "Unknown Error",
-      message: `An unexpected error has occurred. This is problably a bug in WebBS.`,
+      type: error.message,
+      message: `An unexpected error has occurred. This is problably a bug in WebBS. Check the console for more information.`,
       references: []
     };
   }

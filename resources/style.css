@@ -8,6 +8,7 @@
 
 * {
   box-sizing: border-box;
+  font-family: "IBM-VGA9";
 }
 
 :root {
@@ -46,6 +47,10 @@ body {
   padding: 0;
   tab-size: 2;
   -moz-tab-size: 2;
+}
+
+pre {
+  margin: 0;
 }
 
 ::selection {
@@ -342,7 +347,6 @@ body {
 */
 
 #splash {
-  font-family: "IBM-VGA9";
   background-color: var(--token-type);
   color: var(--em);
   height: min-content;

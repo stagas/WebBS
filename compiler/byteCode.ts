@@ -33,7 +33,6 @@ interface BytesPart {
   bytes?: number[] | Uint8Array
   field: Field
   path: string
-  singular: boolean
   value: number | string
 }
 
@@ -53,9 +52,7 @@ export class ByteCodeContainer {
     This stores a single byte, from a string descriptor (see codeTable below).
   */
   byte(code: number | string, field: Field) {
-    this.parts.push({ byte: codeTable[code], field, path: `${this.path}|${field}`, singular: true, value: code });
-    this.totalSize++;
-    return this;
+    return this.bytes(codeTable[code], field, code);
   }
 
 
@@ -63,7 +60,7 @@ export class ByteCodeContainer {
     This stores an array of pre-encoded bytes.
   */
   bytes(bytes: number[] | Uint8Array, field: Field, value: number | string) {
-    this.parts.push({ bytes, field, path: `${this.path}|${field}`, singular: false, value });
+    this.parts.push({ bytes, field, path: `${this.path}|${field}`, value });
     this.totalSize += bytes.length;
     return this;
   }
@@ -145,15 +142,17 @@ export class ByteCodeContainer {
   /*
     This encodes record a numeric literal of the provided runType.
   */
-  literal(runType: RunType, value: number, field: Field) {
+  literal(runType: RunType, value: number | number[], field: Field) {
     if (runType === "i32" || runType === "i64") {
       // The limits for integer literals have already been checked during the validation stage,
       //  so we can just use LEB here with no size limits and trust that we get any acceptable sequence for both i32 and i64 values.
-      this.bytes(LEB(value), field, value);
+      this.bytes(LEB(<number>value), field, <number>value);
     } else if (runType === "f32") {
-      this.bytes(f32(value), field, value);
+      this.bytes(f32(<number>value), field, <number>value);
     } else if (runType === "f64") {
-      this.bytes(f64(value), field, value);
+      this.bytes(f64(<number>value), field, <number>value);
+    } else if (runType === "v128") {
+      this.bytes(v128(<number>value), field, <number>value);
     }
     return this;
   }
@@ -238,6 +237,7 @@ export class ByteCodeContainer {
     } else {
       this.op("set_local").varuint(index, "local_index");
     }
+    return this
   }
 
 
@@ -261,12 +261,8 @@ export class ByteCodeContainer {
     let bytes = new Uint8Array(this.totalSize);
     let i = 0;
     for (let part of this.parts) {
-      if (part.singular) {
-        bytes[i++] = part.byte!;
-      } else {
-        bytes.set(part.bytes!, i);
-        i += part.bytes!.length;
-      }
+      bytes.set(part.bytes!, i);
+      i += part.bytes!.length;
     }
     return bytes;
   }
@@ -300,8 +296,8 @@ export class ByteCodeContainer {
   Utilities
 */
 
-// This is a temporary buffer that we use to extract the bytes from 32/64-bit floats in a predictable order.
-const byteView = new DataView((new Float64Array(1)).buffer);
+// This is a temporary buffer that we use to extract the bytes from 32/64-bit/f32x4/f64x2 floats in a predictable order.
+const byteView = new DataView((new Float64Array(2)).buffer);
 
 // This is used by ByteCodeContainer.string to remove forward-slash escapes in strings.
 const unescapeRegex = /\\(.)/g;
@@ -330,6 +326,45 @@ function f32(value: number) {
 function f64(value: number) {
   byteView.setFloat64(0, value);
   return [
+    byteView.getUint8(7),
+    byteView.getUint8(6),
+    byteView.getUint8(5),
+    byteView.getUint8(4),
+    byteView.getUint8(3),
+    byteView.getUint8(2),
+    byteView.getUint8(1),
+    byteView.getUint8(0)
+  ];
+}
+
+
+/*
+  This is a utility function for encoding f32x4, f64x2 floats into predictably ordered 16 byte segments.
+*/
+function v128(values: number | number[]) {
+  if (typeof values === 'number') {
+    values = [values, values]
+  }
+
+  let lanes = values.length
+  if (lanes === 2) {
+    for (let i = 0; i < values.length; i++) {
+      byteView.setFloat64(i * 8, values[values.length - 1 - i]);
+    }
+  } else if (lanes === 4) {
+    for (let i = 0; i < values.length; i++) {
+      byteView.setFloat32(i * 4, values[values.length - 1 - i]);
+    }
+  }
+  return [
+    byteView.getUint8(15),
+    byteView.getUint8(14),
+    byteView.getUint8(13),
+    byteView.getUint8(12),
+    byteView.getUint8(11),
+    byteView.getUint8(10),
+    byteView.getUint8(9),
+    byteView.getUint8(8),
     byteView.getUint8(7),
     byteView.getUint8(6),
     byteView.getUint8(5),
@@ -393,34 +428,34 @@ function uLEB(number: number, buffer: number[] = []): number[] {
   We initially populate this table with with non-instructional reference codes, then fill in all the defined WebAssembly instructions below.
 */
 
-type CodeTable = Record<string | number, number>
+type CodeTable = Record<string | number, number[]>
 
 const codeTable: CodeTable = {
-  "i32": 0x7f,
-  "i64": 0x7e,
-  "f32": 0x7d,
-  "f64": 0x7c,
-  "v128": 0x7b,
-  "anyfunc": 0x70,
-  "func": 0x60,
-  "void": 0x40,
-  "section.type": 0x01,
-  "section.import": 0x02,
-  "section.function": 0x03,
-  "section.table": 0x04,
-  "section.memory": 0x05,
-  "section.global": 0x06,
-  "section.export": 0x07,
-  "section.start": 0x08,
-  "section.element": 0x09,
-  "section.code": 0x0a,
-  "section.data": 0x0b,
-  "external_kind.function": 0x00,
-  "external_kind.table": 0x01,
-  "external_kind.memory": 0x02,
-  "external_kind.global": 0x03,
-  "global.immutable": 0x00,
-  "global.mutable": 0x01
+  "i32": [0x7f],
+  "i64": [0x7e],
+  "f32": [0x7d],
+  "f64": [0x7c],
+  "v128": [0x7b],
+  "anyfunc": [0x70],
+  "func": [0x60],
+  "void": [0x40],
+  "section.type": [0x01],
+  "section.import": [0x02],
+  "section.function": [0x03],
+  "section.table": [0x04],
+  "section.memory": [0x05],
+  "section.global": [0x06],
+  "section.export": [0x07],
+  "section.start": [0x08],
+  "section.element": [0x09],
+  "section.code": [0x0a],
+  "section.data": [0x0b],
+  "external_kind.function": [0x00],
+  "external_kind.table": [0x01],
+  "external_kind.memory": [0x02],
+  "external_kind.global": [0x03],
+  "global.immutable": [0x00],
+  "global.mutable": [0x01],
 };
 
 
@@ -441,6 +476,37 @@ const opCodes = ["unreachable", "nop", "block", "loop", "if", "else", null, null
 for (let i = 0; i < opCodes.length; i++) {
   let op = opCodes[i];
   if (op !== null) {
-    codeTable[op] = i;
+    codeTable[op] = [i];
+  }
+}
+
+
+const simdOpCodes = ["v128.load", "v128.load8x8_s", "v128.load8x8_u", "v128.load16x4_s", "v128.load16x4_u", "v128.load32x2_s", "v128.load32x2_u", "v128.load8_splat", "v128.load16_splat", "v128.load32_splat", "v128.load64_splat", "v128.store", "v128.const", "i8x16.shuffle", "i8x16.swizzle", "i8x16.splat",
+  "i16x8.splat", "i32x4.splat", "i64x2.splat", "f32x4.splat", "f64x2.splat", "i8x16.extract_lane_s", "i8x16.extract_lane_u", "i8x16.replace_lane", "i16x8.extract_lane_s", "i16x8.extract_lane_u", "i16x8.replace_lane", "i32x4.extract_lane", "i32x4.replace_lane", "i64x2.extract_lane", "i64x2.replace_lane", "f32x4.extract_lane",
+  "f32x4.replace_lane", "f64x2.extract_lane", "f64x2.replace_lane", "i8x16.eq", "i8x16.ne", "i8x16.lt_s", "i8x16.lt_u", "i8x16.gt_s", "i8x16.gt_u", "i8x16.le_s", "i8x16.le_u", "i8x16.ge_s", "i8x16.ge_u", "i16x8.eq", "i16x8.ne", "i16x8.lt_s",
+  "i16x8.lt_u", "i16x8.gt_s", "i16x8.gt_u", "i16x8.le_s", "i16x8.le_u", "i16x8.ge_s", "i16x8.ge_u", "i32x4.eq", "i32x4.ne", "i32x4.lt_s", "i32x4.lt_u", "i32x4.gt_s", "i32x4.gt_u", "i32x4.le_s", "i32x4.le_u", "i32x4.ge_s",
+  "i32x4.ge_u", "f32x4.eq", "f32x4.ne", "f32x4.lt", "f32x4.gt", "f32x4.le", "f32x4.ge", "f64x2.eq", "f64x2.ne", "f64x2.lt", "f64x2.gt", "f64x2.le", "f64x2.ge", "v128.not", "v128.and", "v128.andnot",
+  "v128.or", "v128.xor", "v128.bitselect", "v128.any_true", "v128.load8_lane", "v128.load16_lane", "v128.load32_lane", "v128.load64_lane", "v128.store8_lane", "v128.store16_lane", "v128.store32_lane", "v128.store64_lane", "v128.load32_zero", "v128.load64_zero", "f32x4.demote_f64x2_zero", "f64x2.promote_low_f32x4",
+  "i8x16.abs", "i8x16.neg", "i8x16.popcnt", "i8x16.all_true", "i8x16.bitmask", "i8x16.narrow_i16x8_s", "i8x16.narrow_i16x8_u", "f32x4.ceil", "f32x4.floor", "f32x4.trunc", "f32x4.nearest", "i8x16.shl", "i8x16.shr_s", "i8x16.shr_u", "i8x16.add", "i8x16.add_sat_s",
+  "i8x16.add_sat_u", "i8x16.sub", "i8x16.sub_sat_s", "i8x16.sub_sat_u", "f64x2.ceil", "f64x2.floor", "i8x16.min_s", "i8x16.min_u", "i8x16.max_s", "i8x16.max_u", "f64x2.trunc", "i8x16.avgr_u", "i16x8.extadd_pairwise_i8x16_s", "i16x8.extadd_pairwise_i8x16_u", "i32x4.extadd_pairwise_i16x8_s", "i32x4.extadd_pairwise_i16x8_u",
+  "i16x8.abs", "i16x8.neg", "i16x8.q15mulr_sat_s", "i16x8.all_true", "i16x8.bitmask", "i16x8.narrow_i32x4_s", "i16x8.narrow_i32x4_u", "i16x8.extend_low_i8x16_s", "i16x8.extend_high_i8x16_s", "i16x8.extend_low_i8x16_u", "i16x8.extend_high_i8x16_u", "i16x8.shl", "i16x8.shr_s", "i16x8.shr_u", "i16x8.add", "i16x8.add_sat_s",
+  "i16x8.add_sat_u", "i16x8.sub", "i16x8.sub_sat_s", "i16x8.sub_sat_u", "f64x2.nearest", "i16x8.mul", "i16x8.min_s", "i16x8.min_u", "i16x8.max_s", "i16x8.max_u", "i16x8.avgr_u", "i16x8.extmul_low_i8x16_s", "i16x8.extmul_high_i8x16_s", "i16x8.extmul_low_i8x16_u", "i16x8.extmul_high_i8x16_u",
+  "i32x4.abs", "i32x4.neg", "i8x16.relaxed_swizzle", "i32x4.all_true", "i32x4.bitmask", "i32x4.relaxed_trunc_f32x4_s", "i32x4.relaxed_trunc_f32x4_u", "i32x4.extend_low_i16x8_s", "i32x4.extend_high_i16x8_s", "i32x4.extend_low_i16x8_u", "i32x4.extend_high_i16x8_u", "i32x4.shl", "i32x4.shr_s", "i32x4.shr_u", "i32x4.add", "f32x4.relaxed_madd",
+  "f32x4.relaxed_nmadd", "i32x4.sub", "i8x16.relaxed_laneselect", "i16x8.relaxed_laneselect", "f32x4.relaxed_min", "i32x4.mul", "i32x4.min_s", "i32x4.min_u", "i32x4.max_s", "i32x4.max_u", "i32x4.dot_i16x8_s", "i32x4.extmul_low_i16x8_s", "i32x4.extmul_high_i16x8_s", "i32x4.extmul_low_i16x8_u", "i32x4.extmul_high_i16x8_u",
+  "i64x2.abs", "i64x2.neg", "i64x2.all_true", "i64x2.bitmask", "i32x4.relaxed_trunc_f64x2_s_zero", "i32x4.relaxed_trunc_f64x2_u_zero", "i64x2.extend_low_i32x4_s", "i64x2.extend_high_i32x4_s", "i64x2.extend_low_i32x4_u", "i64x2.extend_high_i32x4_u", "i64x2.shl", "i64x2.shr_s", "i64x2.shr_u", "i64x2.add", "f64x2.relaxed_madd",
+  "f64x2.relaxed_nmadd", null, null, null, "i64x2.sub", "i32x4.relaxed_laneselect", "i64x2.relaxed_laneselect", "f64x2.relaxed_min", "i64x2.mul", "i64x2.eq", "i64x2.ne", "i64x2.lt_s", "i64x2.gt_s", "i64x2.le_s", "i64x2.ge_s", "i64x2.extmul_low_i32x4_s", "i64x2.extmul_high_i32x4_s", "i64x2.extmul_low_i32x4_u", "i64x2.extmul_high_i32x4_u",
+  "f32x4.abs", "f32x4.neg", "f32x4.relaxed_max", "f32x4.sqrt", "f32x4.add", "f32x4.sub", "f32x4.mul", "f32x4.div", "f32x4.min", "f32x4.max", "f32x4.pmin", "f32x4.pmax", "f64x2.abs", "f64x2.neg", "f64x2.relaxed_max", "f64x2.sqrt",
+  "f64x2.add", "f64x2.sub", "f64x2.mul", "f64x2.div", "f64x2.min", "f64x2.max", "f64x2.pmin", "f64x2.pmax", "i32x4.trunc_sat_f32x4_s", "i32x4.trunc_sat_f32x4_u", "f32x4.convert_i32x4_s", "f32x4.convert_i32x4_u", "i32x4.trunc_sat_f64x2_s_zero", "i32x4.trunc_sat_f64x2_u_zero", "f64x2.convert_low_i32x4_s", "f64x2.convert_low_i32x4_u"]
+
+// Use the above simdOpCodes list to fill the codeTable, skipping reserved segments.
+for (let i = 0; i < simdOpCodes.length; i++) {
+  let op = simdOpCodes[i];
+  if (op !== null) {
+    // TODO: figure out which ones need the wtf 0x01 extra byte
+    if (i > 0x1f) {
+      codeTable[op] = [0xfd, i, 0x01];
+    } else {
+      codeTable[op] = [0xfd, i];
+    }
   }
 }

@@ -29,6 +29,8 @@ import { ASTNode } from "./parser.js";
 
 
 export class ASType {
+  kind: string
+
   ASType: ASType
 
   skip = false              // Should the parser ignore this sort of token entirely (true for WS and COMMENT, false otherwise)?
@@ -85,14 +87,20 @@ export const EQ_COMPARISON = new ASType();
 export const EXPORT = new ASType();
 export const EXPORT_TYPE = new ASType();
 export const F32_LITERAL = new ASType();
+export const F32X4_LITERAL = new ASType();
+export const F32X4_LITERAL_LIST = new ASType();
 export const F64_LITERAL = new ASType();
+export const F64X2_LITERAL = new ASType();
+export const F64X2_LITERAL_LIST = new ASType();
 export const FN = new ASType();
 export const FN_LIST = new ASType();
 export const FN_PTR = new ASType();
 export const FN_SIGNATURE = new ASType();
 export const FROM = new ASType();
 export const I32_LITERAL = new ASType();
+export const I32X4_LITERAL = new ASType();
 export const I64_LITERAL = new ASType();
+export const I64X2_LITERAL = new ASType();
 export const IF = new ASType();
 export const IMMUTABLE = new ASType();
 export const IMPORT = new ASType();
@@ -113,6 +121,8 @@ export const RETURN = new ASType();
 export const ROOT = new ASType();
 export const SCALE_OP = new ASType();
 export const SEMICOLON = new ASType();
+export const SIMD_SCALE_OP = new ASType();
+export const SIMD_TYPE = new ASType();
 export const STRING = new ASType();
 export const STORAGE_TYPE = new ASType();
 export const SUB = new ASType();
@@ -149,7 +159,7 @@ recordProperties(
   // Prefix Operators
 
   [operands(0, 1),
-  [ALLOCATE_PAGES, CALL, EXPORT, IMMUTABLE, LOOP, MEMORY_ACCESS, NEG, UNARY_MATH_OP, PTR, RETURN, YIELD]],
+  [ALLOCATE_PAGES, CALL, EXPORT, IMMUTABLE, LOOP, MEMORY_ACCESS, NEG, UNARY_MATH_OP, PTR, RETURN, YIELD, SIMD_TYPE]],
 
   [operands(0, 2),
   [DEFAULT_MEMORY, DEFAULT_TABLE, ELEMENT, FN_PTR, FN_SIGNATURE, IF]],
@@ -163,14 +173,17 @@ recordProperties(
   // Infix Operators
 
   [operands(1, 1),
-  [DEFINITION, DECLARATION, SCALE_OP, ADD, AS, MISC_INFIX, SUB, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, ORDER_COMPARISON, EQ_COMPARISON, AND, OR, ASSIGN, ELSE, INIT_EXPR]],
+  [DEFINITION, DECLARATION, SCALE_OP, ADD, AS, MISC_INFIX, SUB, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, ORDER_COMPARISON, EQ_COMPARISON, AND, OR, ASSIGN, ELSE, INIT_EXPR, SIMD_SCALE_OP]],
 
   // Open Expressions (various paren types, blocks, etc.) and their terminators
   [{ expectedChildCount: Infinity },
   [ADDRESS, ARG_LIST, BLOCK, PARAM_LIST, PAREN, ROOT, TYPE_LIST, FN_LIST]],
 
+  [{ expectedChildCount: 5 },
+  [F32X4_LITERAL_LIST]],
+
   [{ ignoresTerminator: COMMA },
-  [ARG_LIST, PARAM_LIST, TYPE_LIST, FN_LIST]],
+  [ARG_LIST, PARAM_LIST, TYPE_LIST, FN_LIST, F32X4_LITERAL_LIST]],
 
   [{ ignoresTerminator: SEMICOLON },
   [ADDRESS, BLOCK, PAREN, ROOT]],
@@ -185,7 +198,7 @@ recordProperties(
   [ROOT]],
 
   [{ requiresTerminator: PAREN_CLOSE },
-  [ARG_LIST, PARAM_LIST, PAREN, TYPE_LIST, FN_LIST]],
+  [ARG_LIST, PARAM_LIST, PAREN, TYPE_LIST, FN_LIST, F32X4_LITERAL_LIST]],
 
   [{ isTerminator: true },
   [BLOCK_CLOSE, COMMA, END_OF_INPUT, ADDRESS_CLOSE, PAREN_CLOSE, SEMICOLON]],
@@ -265,20 +278,21 @@ function CTCByPos(...positions: ASType[][]): CTCFn {
 
 ASSIGN.CTC = CTCByPos([DEFINITION, VARIABLE, MEMORY_ACCESS]);  // The right operand of ASSIGN isn't constrained.
 AS.CTC = CTCByPos([EXPORT_TYPE, VARIABLE], [STRING]);
-DECLARATION.CTC = CTCByPos([VARIABLE], [FN_PTR, FN_SIGNATURE, IMMUTABLE, PTR, VALUE_TYPE]);
+DECLARATION.CTC = CTCByPos([VARIABLE], [FN_PTR, FN_SIGNATURE, IMMUTABLE, PTR, VALUE_TYPE, SIMD_TYPE]);
 DEFAULT_MEMORY.CTC = CTCByPos([I32_LITERAL], [I32_LITERAL, VOID]);
 DEFAULT_TABLE.CTC = CTCByPos([I32_LITERAL], [I32_LITERAL, VOID]);
-DEFINITION.CTC = CTCByPos([VARIABLE], [FN, FN_PTR, IMMUTABLE, PTR, VALUE_TYPE]);
+DEFINITION.CTC = CTCByPos([VARIABLE], [FN, FN_PTR, IMMUTABLE, PTR, VALUE_TYPE, SIMD_TYPE]);
 ELEMENT.CTC = CTCByPos([I32_LITERAL], [FN_LIST]);
 ELSE.CTC = CTCByPos([IF], [BLOCK, BREAK, CONTINUE, IF, ELSE]);
 EXPORT.CTC = CTCByPos([AS, VARIABLE]);
+SIMD_TYPE.CTC = CTCByPos([F32X4_LITERAL_LIST]);
 FN.CTC = CTCByPos([PARAM_LIST], [VALUE_TYPE, VOID], [BLOCK]);
 FN_PTR.CTC = CTCByPos([TYPE_LIST], [VALUE_TYPE, VOID]);
 FN_SIGNATURE.CTC = CTCByPos([TYPE_LIST], [VALUE_TYPE, VOID]);
 IF.CTC = CTCByPos([PAREN], [BLOCK, BREAK, CONTINUE]);
 IMMUTABLE.CTC = CTCByPos([FN_PTR, PTR, VALUE_TYPE]);
 IMPORT.CTC = CTCByPos([DECLARATION, DEFAULT_MEMORY, DEFAULT_TABLE], [FROM], [STRING]);
-INIT_EXPR.CTC = CTCByPos([DEFINITION], [F32_LITERAL, F64_LITERAL, I32_LITERAL, I64_LITERAL, VARIABLE]);
+INIT_EXPR.CTC = CTCByPos([DEFINITION], [SIMD_TYPE, F32_LITERAL, F64_LITERAL, I32_LITERAL, I64_LITERAL, VARIABLE]);
 LOOP.CTC = CTCByPos([BLOCK, ELSE, IF]);
 NEG.CTC = CTCByPos([F32_LITERAL, F64_LITERAL, I32_LITERAL, I64_LITERAL]);
 PTR.CTC = CTCByPos([STORAGE_TYPE, VALUE_TYPE]);
@@ -312,10 +326,17 @@ function CTCForAll(...acceptableTypes: ASType[]): CTCFn {
 PARAM_LIST.CTC = CTCForAll(DECLARATION);
 ROOT.CTC = CTCForAll(DEFINITION, DEFAULT_MEMORY, DEFAULT_TABLE, ELEMENT, EXPORT, IMPORT, INIT_EXPR);
 TYPE_LIST.CTC = CTCForAll(VALUE_TYPE);
-// FN_LIST.CTC = CTCForAll(ELEMENT);
+
+F32X4_LITERAL_LIST.CTC = CTCForAll(F32_LITERAL);
 
 // ADDRESS is a special case, as it has a variable (but bounded) number of children and an ASType constraint only on the second child.
-ADDRESS.CTC = ({ children }) => (children.length === 1 || (children.length === 2 && children[1].ASType === I32_LITERAL)) ? null : {};
+ADDRESS.CTC = ({ children }) => (
+  children.length === 1 ||
+  (children.length === 2 && (
+    children[1].ASType === I32_LITERAL ||
+    children[1].ASType === VALUE_TYPE // TODO: use specfic for the lanes
+  ))
+) ? null : {};
 
 /*
   Parent Type Constaints (PTC)
@@ -382,7 +403,7 @@ PTR.PTC = PTCByPos([DECLARATION, 1], [DEFINITION, 1], [IMMUTABLE, 0]);
 RETURN.PTC = PTCByPos([BLOCK, null]);
 STRING.PTC = PTCByPos([IMPORT, 2], [AS, 1]);
 STORAGE_TYPE.PTC = PTCByPos([PTR, 0]);
-VALUE_TYPE.PTC = PTCByPos([DECLARATION, 1], [DEFINITION, 1], [FN, 1], [FN_PTR, 1], [FN_SIGNATURE, 1], [IMMUTABLE, 0], [PTR, 0], [TYPE_LIST, null],);
+VALUE_TYPE.PTC = PTCByPos([ADDRESS, 1], [DECLARATION, 1], [DEFINITION, 1], [FN, 1], [FN_PTR, 1], [FN_SIGNATURE, 1], [IMMUTABLE, 0], [PTR, 0], [TYPE_LIST, null],);
 VOID.PTC = PTCByPos([FN, 1], [FN_PTR, 1], [FN_SIGNATURE, 1], [DEFAULT_MEMORY, 1], [DEFAULT_TABLE, 1]);
 YIELD.PTC = PTCByPos([BLOCK, null]);
 
@@ -447,7 +468,7 @@ YIELD.PTC = PTCByPos([BLOCK, null]);
   [ELSE],
   [SUFFIX_OP],
   [LOOP, NEG, UNARY_MATH_OP],
-  [SCALE_OP],
+  [SCALE_OP, SIMD_SCALE_OP],
   [ADD, SUB],
   [MISC_INFIX],
   [BITWISE_SHIFT],
@@ -506,6 +527,7 @@ YIELD.PTC = PTCByPos([BLOCK, null]);
     This is another potential issue that could be solved with a modal lexer.
 */
 export function getASType(ASType: ASType, parentType: ASType) {
+  // console.log(ASType, parentType)
   if (ASType === PAREN) {
     // Parentheses are used for various types of things with different syntactical and semantic constraints, so we disambiguate those.
     if (parentType === FN) {
@@ -519,8 +541,13 @@ export function getASType(ASType: ASType, parentType: ASType) {
     } else if (parentType === FN_PTR || parentType === FN_SIGNATURE) {
       // As part of an imported function definition, a parenthetical is a list of parameter types (without names).
       return TYPE_LIST;
+
     } else if (parentType === ELEMENT) {
       return FN_LIST;
+
+    } else if (parentType === SIMD_TYPE) {
+      // console.log('YES')
+      return F32X4_LITERAL_LIST;
     }
 
   } else if (parentType === IMPORT || parentType === PARAM_LIST) {

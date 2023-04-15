@@ -8,7 +8,7 @@
 */
 import { ByteCodeContainer } from "./byteCode.js";
 import { ASTNode } from "./parser.js";
-import { ADD, ALLOCATE_PAGES, AND, ASSIGN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, BLOCK, BREAK, CALL, CONTINUE, DEFINITION, ELSE, EQ_COMPARISON, F32_LITERAL, F64_LITERAL, FN, FN_PTR, I32_LITERAL, I64_LITERAL, IF, LOOP, MEMORY_ACCESS, MISC_INFIX, NEG, OR, ORDER_COMPARISON, PAGES_ALLOCATED, PAREN, PASS, RETURN, SCALE_OP, SUB, SUFFIX_OP, UNARY_MATH_OP, VARIABLE, YIELD } from "./syntax.js";
+import { ADD, ALLOCATE_PAGES, AND, ASSIGN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, BLOCK, BREAK, CALL, CONTINUE, DEFINITION, ELSE, EQ_COMPARISON, F32_LITERAL, F64_LITERAL, FN, FN_PTR, I32_LITERAL, I64_LITERAL, IF, LOOP, MEMORY_ACCESS, MISC_INFIX, NEG, OR, ORDER_COMPARISON, PAGES_ALLOCATED, PAREN, PASS, RETURN, SCALE_OP, SIMD_SCALE_OP, SIMD_TYPE, SUB, SUFFIX_OP, UNARY_MATH_OP, VARIABLE, YIELD } from "./syntax.js";
 
 
 /*
@@ -23,6 +23,7 @@ export function generate(bytecodeParent: ByteCodeContainer, node: ASTNode, depth
 
     case ADD:
     case SUB:
+    case SIMD_SCALE_OP:
     case SCALE_OP:
     case BITWISE_AND:
     case BITWISE_OR:
@@ -71,9 +72,10 @@ export function generate(bytecodeParent: ByteCodeContainer, node: ASTNode, depth
 
       if (left.ASType !== MEMORY_ACCESS) {
         bytecode
+          .section(`${left.ASType === DEFINITION ? left.children[0].token.text : left.token.text}`)
           .generate(right, depth)
-          .setVariable(left.meta.index, left.meta.isGlobal, !dropValue);
-
+          .setVariable(left.meta.index, left.meta.isGlobal, !dropValue)
+          .finishSection();
       } else {  // left.ASType === MEMORY_ACCESS
         let { index, isGlobal, storageSize, returnType, extendedType, storageBits } = left.meta;
         let [address, offsetProvided] = left.children[0].children;
@@ -213,24 +215,35 @@ export function generate(bytecodeParent: ByteCodeContainer, node: ASTNode, depth
 
 
     case MEMORY_ACCESS: {
+      let op = children[0]
       let { index, isGlobal, storageSize, runType, extendedType, storageSigned, storageBits } = node.meta;
-      let [address, offsetProvided] = children[0].children;
-      let offset = offsetProvided === undefined ? 0 : offsetProvided.meta.value;
 
-      for (var alignment = Math.log2(storageSize); offset % (2 ** alignment) !== 0; alignment--); // Calculate the alignment.
-
-      let loadOp = `${runType}.load`;
-      if (extendedType) {
-        loadOp += `${storageBits}_${storageSigned}`;
+      if (op.meta?.simdLaneExtract) {
+        let { simdLane, simdType } = op.meta
+        bytecode
+          .getVariable(index, isGlobal)
+          .op(`${simdType}x4.extract_lane`)
+          .varuint(simdLane, "lane_index")
       }
+      else {
+        let [address, offsetProvided] = children[0].children;
+        let offset = offsetProvided === undefined ? 0 : offsetProvided.meta.value;
 
-      bytecode
-        .generate(address, depth)
-        .getVariable(index, isGlobal)
-        .op("i32.add")
-        .op("i32.const").varuint(storageSize, "value")
-        .op("i32.mul")
-        .op(loadOp).varuint(alignment, "flags").varuint(offset, "offset");
+        for (var alignment = Math.log2(storageSize); offset % (2 ** alignment) !== 0; alignment--); // Calculate the alignment.
+
+        let loadOp = `${runType}.load`;
+        if (extendedType) {
+          loadOp += `${storageBits}_${storageSigned}`;
+        }
+
+        bytecode
+          .generate(address, depth)
+          .getVariable(index, isGlobal)
+          .op("i32.add")
+          .op("i32.const").varuint(storageSize, "value")
+          .op("i32.mul")
+          .op(loadOp).varuint(alignment, "flags").varuint(offset, "offset");
+      }
     } break;
 
 
@@ -274,6 +287,12 @@ export function generate(bytecodeParent: ByteCodeContainer, node: ASTNode, depth
       dropValue = false;  // Don't generate an unreachable drop instruction, no matter what the validation stage says.
     } break;
 
+
+    case SIMD_TYPE: {
+      bytecode
+        .op(`${runType}.const`)
+        .literal(runType, node.meta.simdValues, "value")
+    } break;
 
     case SUFFIX_OP: {
       let child = children[0];

@@ -1,7 +1,7 @@
 import { lexify } from "../compiler/lexer.js";
 import { generateModule } from "../compiler/moduleCodeGen.js";
 import { parse } from "../compiler/parser.js";
-import { ADD, ADDRESS, ADDRESS_CLOSE, ALLOCATE_PAGES, AND, ARG_LIST, AS, ASSIGN, BAD_TOKEN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, BLOCK, BLOCK_CLOSE, BREAK, CALL, COMMA, COMMENT, CONTINUE, DECLARATION, DEFAULT_MEMORY, DEFAULT_TABLE, DEFINITION, ELEMENT, ELSE, END_OF_INPUT, EQ_COMPARISON, EXPORT, EXPORT_TYPE, F32_LITERAL, F64_LITERAL, FN, FN_LIST, FN_PTR, FN_SIGNATURE, FROM, I32_LITERAL, I64_LITERAL, IF, IMMUTABLE, IMPORT, INIT_EXPR, LOOP, MEMORY_ACCESS, MISC_INFIX, NEG, OR, ORDER_COMPARISON, PAGES_ALLOCATED, PARAM_LIST, PAREN, PAREN_CLOSE, PASS, PTR, RETURN, ROOT, SCALE_OP, SEMICOLON, STORAGE_TYPE, STRING, SUB, SUFFIX_OP, TYPE_LIST, UNARY_MATH_OP, VALUE_TYPE, VARIABLE, VOID, WS, YIELD } from "../compiler/syntax.js";
+import { ADD, ADDRESS, ADDRESS_CLOSE, ALLOCATE_PAGES, AND, ARG_LIST, AS, ASSIGN, BAD_TOKEN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, BLOCK, BLOCK_CLOSE, BREAK, CALL, COMMA, COMMENT, CONTINUE, DECLARATION, DEFAULT_MEMORY, DEFAULT_TABLE, DEFINITION, ELEMENT, ELSE, END_OF_INPUT, EQ_COMPARISON, EXPORT, EXPORT_TYPE, F32_LITERAL, F64_LITERAL, FN, FN_LIST, FN_PTR, FN_SIGNATURE, FROM, I32_LITERAL, I64_LITERAL, IF, IMMUTABLE, IMPORT, INIT_EXPR, LOOP, MEMORY_ACCESS, MISC_INFIX, NEG, OR, ORDER_COMPARISON, PAGES_ALLOCATED, PARAM_LIST, PAREN, PAREN_CLOSE, PASS, PTR, RETURN, ROOT, SCALE_OP, SEMICOLON, SIMD_SCALE_OP, SIMD_TYPE, STORAGE_TYPE, STRING, SUB, SUFFIX_OP, TYPE_LIST, UNARY_MATH_OP, VALUE_TYPE, VARIABLE, VOID, WS, YIELD } from "../compiler/syntax.js";
 import { generateErrorMessage } from "../editor/errorMessages.js";
 
 
@@ -573,9 +573,9 @@ export class Editor {
       for (let newSection of newSections) {
         markup += `<div>${"  ".repeat(indentation++)}<span class="annotation">; ${newSection}</span></div>`;
       }
-      let bytes = part.singular ? toHex(part.byte) : part.bytes.map(toHex).join(" ");
+      let bytes = part.bytes.map(toHex).join(" ");
       markup += `<div title="offset ${position}">${"  ".repeat(indentation)}<span class="bytes">${bytes}</span> <span class="annotation">; ${field}</span> <span class="value">${part.value}</span></div>`;
-      position += part.singular ? 1 : part.bytes.length;
+      position += part.bytes.length;
       prevPath = path;
     }
     this.DOMNodes.bytecode.innerHTML = markup;
@@ -730,9 +730,9 @@ const categories = {
   "ignore": [COMMA, COMMENT, SEMICOLON],
   "keyword": [ALLOCATE_PAGES, AS, BREAK, CONTINUE, ELSE, EXPORT, FROM, IF, IMPORT, LOOP, PAGES_ALLOCATED, PASS, RETURN, YIELD],
   "literal": [F32_LITERAL, F64_LITERAL, I32_LITERAL, I64_LITERAL, STRING],
-  "operator": [ADD, AND, ASSIGN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, DECLARATION, DEFINITION, EQ_COMPARISON, INIT_EXPR, MISC_INFIX, NEG, OR, ORDER_COMPARISON, SCALE_OP, SUB, SUFFIX_OP, UNARY_MATH_OP],
+  "operator": [ADD, AND, ASSIGN, BITWISE_AND, BITWISE_OR, BITWISE_SHIFT, BITWISE_XOR, DECLARATION, DEFINITION, EQ_COMPARISON, INIT_EXPR, MISC_INFIX, NEG, OR, ORDER_COMPARISON, SCALE_OP, SUB, SUFFIX_OP, UNARY_MATH_OP, SIMD_SCALE_OP],
   "paren": [ARG_LIST, PARAM_LIST, PAREN, PAREN_CLOSE, TYPE_LIST],
-  "type": [DEFAULT_MEMORY, DEFAULT_TABLE, IMMUTABLE, STORAGE_TYPE, VALUE_TYPE, VOID],
+  "type": [DEFAULT_MEMORY, DEFAULT_TABLE, IMMUTABLE, STORAGE_TYPE, VALUE_TYPE, VOID, SIMD_TYPE],
   "ws": [WS]
 };
 
